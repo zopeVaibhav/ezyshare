@@ -148,9 +148,11 @@ function withinSkew(ts) {
 
 // A signed message is good exactly once, so one captured off the wire cannot be replayed
 // inside the skew window - which a MAC on its own would still allow.
+// The ceiling only has to bound what a sender can put in body.nonce; the announce key is
+// built here from an id, a timestamp and an already length-checked mac, so it is longer.
 const usedNonces = new Map();
 function nonceIsNew(nonce) {
-  if (typeof nonce !== 'string' || nonce.length < 8 || nonce.length > 96) return false;
+  if (typeof nonce !== 'string' || nonce.length < 8 || nonce.length > 160) return false;
   if (usedNonces.has(nonce)) return false;
   usedNonces.set(nonce, Date.now() + CLOCK_SKEW_MS * 2);
   return true;
