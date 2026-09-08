@@ -34,8 +34,30 @@ header { display: flex; justify-content: space-between; align-items: center; }
 .switch input:checked + .track { background: var(--accent); }
 .switch input:checked + .track .knob { transform: translateX(14px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); flex: none; }
 .dot.on { background: var(--accent); }
+
+/* Visible only to assistive tech: labels and the live region that narrates send results. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}
+
+.chip {
+  margin-left: auto; flex: none;
+  padding: 1px 7px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--card);
+  font-size: 10px; font-weight: 650; letter-spacing: 0.03em;
+  color: var(--muted); cursor: help;
+}
+.chip.locked { border-color: var(--accent); color: var(--accent); }
+
+.count {
+  display: inline-grid; place-items: center; min-width: 16px; height: 16px;
+  padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: #fff;
+  font-size: 10px; font-weight: 700; letter-spacing: 0;
+}
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 6px; }
 .hint, .empty { color: var(--muted); font-size: 12px; margin: 0 0 10px; }
 .empty { text-align: center; padding: 14px; border: 1px dashed var(--line); border-radius: 8px; }
@@ -50,6 +72,8 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
   transition: border-color .12s, transform .12s, background .12s;
 }
 .peer:hover { border-color: var(--accent); }
+.peer:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--accent); }
+.peer:active { transform: scale(0.99); }
 .peer.over { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--card)); transform: scale(1.02); }
 .peer.sent { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 22%, var(--card)); }
 .peer.failed { border-color: var(--warn); }
@@ -77,4 +101,14 @@ button.ghost {
   color: var(--muted); font: inherit; font-size: 12px; cursor: pointer;
 }
 button.ghost:hover { border-color: var(--accent); color: var(--fg); }
+button.ghost:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 footer { margin-top: 4px; }
+
+.item a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+
+h2 { display: flex; align-items: center; gap: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; }
+  .peer.over, .peer:active { transform: none; }
+}

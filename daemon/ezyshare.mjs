@@ -571,7 +571,9 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === '/api/peers') {
-    return json(res, 200, { me: { id: SELF_ID, name: SELF_NAME }, enabled: config.enabled, peers: config.enabled ? peerList() : [] });
+    // `secured` lets the panel tell the user whether a shared secret is in force. It is a
+    // boolean on purpose: the secret itself never leaves the daemon.
+    return json(res, 200, { me: { id: SELF_ID, name: SELF_NAME }, enabled: config.enabled, secured: Boolean(SECRET), peers: config.enabled ? peerList() : [] });
   }
 
   if (route === '/api/send' && req.method === 'POST') {
