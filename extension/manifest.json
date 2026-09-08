@@ -1,0 +1,12 @@
+{
+  "manifest_version": 3,
+  "name": "ezyshare",
+  "version": "0.1.0",
+  "description": "Drop a link on a friend's name and it opens on their machine. Same wifi, no cloud.",
+  "permissions": ["notifications", "alarms", "storage", "sidePanel", "tabs", "contextMenus"],
+  "host_permissions": ["http://127.0.0.1/*"],
+  "background": { "service_worker": "background.js", "type": "module" },
+  "action": { "default_title": "ezyshare" },
+  "side_panel": { "default_path": "sidepanel.html" },
+  "icons": { "128": "icons/icon128.png" }
+}
