@@ -22,19 +22,52 @@ Zero npm dependencies. Node 18+ is the only requirement.
 
 ## Install (do this on every machine)
 
+Needs Node 18+ on each machine. Check with `node -v`; get it from https://nodejs.org.
+
 1. Copy this folder to the machine.
-2. Start the daemon:
+2. Start the daemon.
+
+   macOS / Linux:
    ```bash
    ./start.sh --name "Your Name"
    ```
-   Approve the macOS firewall prompt the first time so other machines can reach it.
+
+   Windows (double-click `start.cmd`, or from a terminal):
+   ```bat
+   start.cmd --name "Your Name"
+   ```
+
+   Approve the firewall prompt the first time so other machines can reach you.
+   On Windows tick **Private networks**; on macOS click **Allow**.
 3. Load the extension: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the `extension/` folder.
 4. Click the ezyshare toolbar icon to open the side panel. Your friend's name shows up within a few seconds.
 
-To keep the daemon running after every login:
+### Keep it running after every login
 
+macOS:
 ```bash
 ./install-autostart.sh "Your Name"
+```
+
+Windows (double-click, or pass a name):
+```bat
+install-autostart.cmd "Your Name"
+```
+Drops a hidden launcher in your Startup folder. Undo with `uninstall-autostart.cmd`.
+
+Linux (systemd user service):
+```bash
+mkdir -p ~/.config/systemd/user
+cat > ~/.config/systemd/user/ezyshare.service <<EOF
+[Unit]
+Description=ezyshare daemon
+[Service]
+ExecStart=$(command -v node) $PWD/daemon/ezyshare.mjs --name "$(hostname)"
+Restart=always
+[Install]
+WantedBy=default.target
+EOF
+systemctl --user enable --now ezyshare
 ```
 
 ## Sending a link
@@ -84,7 +117,9 @@ Anyone on the same wifi can send you a link. That is the point, and it is also t
 
 **Side panel says "Daemon not running"** — start it, then hit Refresh.
 
-**Friend's name never appears** — check both daemons print the same LAN subnet in their startup banner, and that macOS firewall allows Node to accept incoming connections (System Settings → Network → Firewall → Options). If the network blocks broadcast, use `--peer`.
+**Windows: `start.cmd` flashes and closes** — Node is not installed or not on PATH. Install from nodejs.org, reopen the terminal.
+
+**Friend's name never appears** — check both daemons print the same LAN subnet in their startup banner, and that the firewall allows Node to accept incoming connections (macOS: System Settings → Network → Firewall → Options; Windows: Windows Defender Firewall → Allow an app, tick **Private**). If the network blocks broadcast, use `--peer`.
 
 **"could not reach <name>"** — their daemon died or the firewall is blocking port 8787.
 
@@ -95,4 +130,4 @@ Anyone on the same wifi can send you a link. That is the point, and it is also t
 - Links only, no files.
 - No pairing yet: any ezyshare daemon on the LAN can send to you.
 - Traffic is plain HTTP on the LAN.
-- Chrome / Chromium only.
+- Chrome / Chromium only. Daemon runs on macOS, Windows and Linux.
