@@ -19,11 +19,13 @@ const HTTP_PORT_DEFAULT = 8787;
 const ANNOUNCE_INTERVAL_MS = 3000;
 const PEER_TTL_MS = 12000;
 const MAX_ITEMS = 200;
+const CLOCK_SKEW_MS = 30000;   // how far a signed announce or POST may drift before we drop it
+const CONFLICT_LOG_MS = 30000; // throttle for "someone else is claiming this peer" warnings
 
 // ---------------------------------------------------------------- args
 
 function parseArgs(argv) {
-  const out = { name: null, port: HTTP_PORT_DEFAULT, dport: DISCOVERY_PORT_DEFAULT, peers: [], dir: null };
+  const out = { name: null, port: HTTP_PORT_DEFAULT, dport: DISCOVERY_PORT_DEFAULT, peers: [], dir: null, secret: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -32,6 +34,7 @@ function parseArgs(argv) {
     else if (a === '--discovery-port') out.dport = Number(next());
     else if (a === '--peer') out.peers.push(next());
     else if (a === '--dir') out.dir = next();
+    else if (a === '--secret') out.secret = next();
     else if (a === '--help' || a === '-h') { usage(); process.exit(0); }
     else { console.error(`unknown flag: ${a}`); usage(); process.exit(1); }
   }
@@ -46,6 +49,9 @@ function usage() {
   --discovery-port <n>    udp broadcast port (default ${DISCOVERY_PORT_DEFAULT})
   --peer <host:port>      add a peer manually (repeatable, for when broadcast is blocked)
   --dir <path>            state directory (default ~/.ezyshare)
+  --secret <str>          shared secret; only daemons with the same one can be seen or
+                          send to you. Also settable via EZYSHARE_SECRET or a file at
+                          <dir>/secret. Off by default.
 `);
 }
 
@@ -66,6 +72,51 @@ try {
 }
 const SELF_NAME = args.name || process.env.EZYSHARE_NAME || os.hostname().replace(/\.local$/, '');
 const HTTP_PORT = args.port;
+
+// Opt-in shared secret. Unset means the daemon behaves exactly as it always has:
+// open to every ezyshare on the LAN. Set on every machine that should see each other.
+function loadSecret() {
+  if (args.secret) return args.secret;
+  if (process.env.EZYSHARE_SECRET) return process.env.EZYSHARE_SECRET;
+  try {
+    const fromFile = fs.readFileSync(path.join(STATE_DIR, 'secret'), 'utf8').trim();
+    if (fromFile) return fromFile;
+  } catch { /* no secret file, stay open */ }
+  return null;
+}
+const SECRET = loadSecret();
+
+function hmac(canonical) {
+  return crypto.createHmac('sha256', SECRET).update(canonical).digest('hex');
+}
+
+// Constant-time compare that tolerates a missing or wrong-length candidate.
+function macEquals(expected, got) {
+  if (typeof got !== 'string' || got.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(got));
+}
+
+function fresh(ts) {
+  return Number.isFinite(ts) && Math.abs(Date.now() - ts) <= CLOCK_SKEW_MS;
+}
+
+// A signed announce or POST is only good once, so a captured one cannot be replayed
+// inside the skew window.
+const usedNonces = new Map();
+function nonceIsNew(nonce) {
+  if (typeof nonce !== 'string' || nonce.length < 8 || nonce.length > 64) return false;
+  if (usedNonces.has(nonce)) return false;
+  usedNonces.set(nonce, Date.now() + CLOCK_SKEW_MS * 2);
+  return true;
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [n, exp] of usedNonces) if (exp < now) usedNonces.delete(n);
+}, CLOCK_SKEW_MS).unref();
+
+const announceMac = (id, name, port, ts) => hmac(`hi|${id}|${name}|${port}|${ts}`);
+const whoamiMac = (id, name, port, nonce) => hmac(`whoami|${id}|${name}|${port}|${nonce}`);
+const inboxMac = (rawBody) => hmac(`inbox|${rawBody}`);
 
 // ---------------------------------------------------------------- state
 
@@ -126,9 +177,12 @@ function broadcastAddresses() {
 const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
 function sendAnnounce(target) {
-  const msg = Buffer.from(JSON.stringify({
-    t: 'hi', id: SELF_ID, name: SELF_NAME, port: HTTP_PORT,
-  }));
+  const body = { t: 'hi', id: SELF_ID, name: SELF_NAME, port: HTTP_PORT };
+  if (SECRET) {
+    body.ts = Date.now();
+    body.mac = announceMac(SELF_ID, SELF_NAME, HTTP_PORT, body.ts);
+  }
+  const msg = Buffer.from(JSON.stringify(body));
   const targets = target ? [target] : broadcastAddresses().map((a) => ({ address: a, port: args.dport }));
   for (const t of targets) {
     sock.send(msg, t.port, t.address, (err) => {
@@ -137,18 +191,73 @@ function sendAnnounce(target) {
   }
 }
 
+const lastConflictLog = new Map();
+function logConflict(name, pinned, seen) {
+  const now = Date.now();
+  if (now - (lastConflictLog.get(name) || 0) < CONFLICT_LOG_MS) return;
+  lastConflictLog.set(name, now);
+  console.error(`! ${name} is pinned to ${pinned} but ${seen} is claiming it - ignoring`);
+}
+
+// A peer that is still announcing from its pinned address cannot be moved by a packet
+// arriving from anywhere else; that packet is how the link-theft hijack starts. When a
+// secret is configured we can safely let a peer move sooner, but only after it answers a
+// nonce challenge on the new address - a valid MAC alone would let a captured announce be
+// replayed from the attacker's address.
+const rebinding = new Set();
+
+async function considerRebind(existing, msg, rinfo) {
+  if (Date.now() - existing.lastSeen < PEER_TTL_MS) {
+    logConflict(existing.name, `${existing.addr}:${existing.port}`, `${rinfo.address}:${Number(msg.port) || HTTP_PORT_DEFAULT}`);
+    return;
+  }
+  if (!SECRET) return; // stale entry: the TTL sweeper drops it and normal discovery re-adds it
+  const key = `${msg.id}@${rinfo.address}`;
+  if (rebinding.has(key)) return;
+  rebinding.add(key);
+  try {
+    const port = Number(msg.port) || HTTP_PORT_DEFAULT;
+    const who = await probeWhoami(rinfo.address, port);
+    if (!who || who.id !== msg.id) return;
+    peers.set(msg.id, {
+      id: msg.id,
+      name: String(who.name || msg.name || 'unknown').slice(0, 64),
+      addr: rinfo.address,
+      port,
+      lastSeen: Date.now(),
+      manual: false,
+    });
+    console.log(`~ ${who.name} moved to ${rinfo.address}`);
+  } catch { /* new address did not verify, keep the pin */ }
+  finally { rebinding.delete(key); }
+}
+
 sock.on('message', (buf, rinfo) => {
   let msg;
   try { msg = JSON.parse(buf.toString()); } catch { return; }
   if (msg.t !== 'hi' || !msg.id || msg.id === SELF_ID) return;
+  // With a secret set, an unsigned or stale announce is not a peer we know.
+  if (SECRET) {
+    if (!fresh(Number(msg.ts))) return;
+    if (!macEquals(announceMac(msg.id, String(msg.name || ''), Number(msg.port) || HTTP_PORT_DEFAULT, msg.ts), msg.mac)) return;
+    if (!nonceIsNew(`hi:${msg.id}:${msg.ts}:${msg.mac.slice(0, 16)}`)) return;
+  }
+  const port = Number(msg.port) || HTTP_PORT_DEFAULT;
+  const existing = peers.get(msg.id);
+  // Address AND port are pinned together: both pick where a link gets delivered, so
+  // moving either one is a redirect and has to be treated the same way.
+  if (existing && !existing.manual && (existing.addr !== rinfo.address || existing.port !== port)) {
+    considerRebind(existing, msg, rinfo);
+    return;
+  }
   const known = peers.has(msg.id);
   peers.set(msg.id, {
     id: msg.id,
     name: String(msg.name || 'unknown').slice(0, 64),
     addr: rinfo.address,
-    port: Number(msg.port) || HTTP_PORT_DEFAULT,
+    port,
     lastSeen: Date.now(),
-    manual: false,
+    manual: existing ? existing.manual : false,
   });
   // Reply straight away so a machine that just joined shows up instantly on both sides.
   if (!known) {
@@ -181,15 +290,25 @@ setInterval(() => {
   }
 }, 3000);
 
+// Ask a host to prove which daemon it is. The nonce is ours, so a recorded reply from
+// some other exchange cannot be replayed back at us.
+async function probeWhoami(host, port) {
+  const nonce = crypto.randomBytes(16).toString('hex');
+  const res = await fetch(`http://${host}:${port}/whoami?nonce=${nonce}`, { signal: AbortSignal.timeout(2000) });
+  const who = await res.json();
+  if (!who || typeof who.id !== 'string') return null;
+  if (SECRET && !macEquals(whoamiMac(who.id, String(who.name || ''), Number(who.port) || port, nonce), who.mac)) return null;
+  return who;
+}
+
 // Manual peers: for networks where UDP broadcast is blocked (some office / guest wifi).
 async function probeManualPeers() {
   for (const spec of args.peers) {
     const [host, portStr] = spec.split(':');
     const port = Number(portStr) || HTTP_PORT_DEFAULT;
     try {
-      const res = await fetch(`http://${host}:${port}/whoami`, { signal: AbortSignal.timeout(2000) });
-      const who = await res.json();
-      if (who.id === SELF_ID) continue;
+      const who = await probeWhoami(host, port);
+      if (!who || who.id === SELF_ID) continue;
       peers.set(who.id, { id: who.id, name: who.name, addr: host, port, lastSeen: Date.now(), manual: true });
     } catch { /* peer offline */ }
   }
@@ -204,6 +323,8 @@ function json(res, code, body) {
   res.end(payload);
 }
 
+// Returns the raw text as well as the parsed object: /inbox has to authenticate the exact
+// bytes it received, not a re-serialisation of them.
 function readBody(req, limit = 64 * 1024) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -214,15 +335,20 @@ function readBody(req, limit = 64 * 1024) {
       chunks.push(c);
     });
     req.on('end', () => {
-      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}); }
+      const raw = chunks.length ? Buffer.concat(chunks).toString() : '';
+      try { resolve({ data: raw ? JSON.parse(raw) : {}, raw }); }
       catch (e) { reject(e); }
     });
     req.on('error', reject);
   });
 }
 
+function remoteIp(req) {
+  return (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+}
+
 function isLoopback(req) {
-  const ip = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const ip = remoteIp(req);
   return ip === '127.0.0.1' || ip === '::1';
 }
 
@@ -259,24 +385,42 @@ function guardApi(req, res) {
   return true;
 }
 
+// Who really sent this link? Only the discovery table can answer that. The POST body says
+// whatever the sender wants it to say, so its fromName is never used.
+function senderFor(fromId, ip) {
+  const byId = peers.get(fromId);
+  if (byId && byId.addr === ip) return byId;
+  return [...peers.values()].find((p) => p.addr === ip) || null;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const route = url.pathname;
 
   // ---- LAN surface -------------------------------------------------
   if (route === '/whoami' && req.method === 'GET') {
-    return json(res, 200, { id: SELF_ID, name: SELF_NAME, port: HTTP_PORT });
+    const body = { id: SELF_ID, name: SELF_NAME, port: HTTP_PORT };
+    const nonce = url.searchParams.get('nonce');
+    if (SECRET && nonce) body.mac = whoamiMac(SELF_ID, SELF_NAME, HTTP_PORT, nonce);
+    return json(res, 200, body);
   }
 
   if (route === '/inbox' && req.method === 'POST') {
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    let raw;
+    try { ({ data: body, raw } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
+    if (SECRET) {
+      if (!fresh(Number(body.ts))) return json(res, 401, { error: 'stale or unsigned request' });
+      if (!macEquals(inboxMac(raw), req.headers['x-ezyshare-mac'])) return json(res, 401, { error: 'bad signature' });
+      if (!nonceIsNew(String(body.nonce || ''))) return json(res, 401, { error: 'replayed request' });
+    }
     const link = safeUrl(body.url);
     if (!link) return json(res, 400, { error: 'url must be http or https' });
-    const sender = peers.get(body.fromId);
+    const ip = remoteIp(req);
+    const sender = senderFor(body.fromId, ip);
     const item = addItem({
       fromId: String(body.fromId || 'unknown').slice(0, 64),
-      fromName: (sender?.name || String(body.fromName || 'someone')).slice(0, 64),
+      fromName: sender ? sender.name : `unknown (${ip})`,
       url: link,
       title: String(body.title || '').slice(0, 200),
     });
@@ -298,16 +442,24 @@ const server = http.createServer(async (req, res) => {
 
   if (route === '/api/send' && req.method === 'POST') {
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    try { ({ data: body } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
     const peer = peers.get(body.peerId);
     if (!peer) return json(res, 404, { error: 'peer not found' });
     const link = safeUrl(body.url);
     if (!link) return json(res, 400, { error: 'url must be http or https' });
+    const payload = { fromId: SELF_ID, fromName: SELF_NAME, url: link, title: body.title || '' };
+    if (SECRET) {
+      payload.ts = Date.now();
+      payload.nonce = crypto.randomBytes(16).toString('hex');
+    }
+    const rawOut = JSON.stringify(payload);
+    const headers = { 'content-type': 'application/json' };
+    if (SECRET) headers['x-ezyshare-mac'] = inboxMac(rawOut);
     try {
       const r = await fetch(`http://${peer.addr}:${peer.port}/inbox`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ fromId: SELF_ID, fromName: SELF_NAME, url: link, title: body.title || '' }),
+        headers,
+        body: rawOut,
         signal: AbortSignal.timeout(5000),
       });
       if (!r.ok) return json(res, 502, { error: `peer replied ${r.status}` });
@@ -337,7 +489,7 @@ const server = http.createServer(async (req, res) => {
 
   if (route === '/api/inbox/read' && req.method === 'POST') {
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    try { ({ data: body } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
     const ids = new Set(Array.isArray(body.ids) ? body.ids : []);
     const all = body.all === true;
     for (const it of items) if (all || ids.has(it.id)) it.read = true;
@@ -367,6 +519,8 @@ server.listen(HTTP_PORT, '0.0.0.0', () => {
   console.log(`  http    ${ips.map((ip) => `http://${ip}:${HTTP_PORT}`).join('  ')}`);
   console.log(`  api     http://127.0.0.1:${HTTP_PORT}/api  (extension only)`);
   console.log(`  udp     broadcast on ${args.dport}`);
+  if (SECRET) console.log('  secret  on - only daemons sharing this secret can see you or send to you');
+  else console.log('  secret  off - anyone on this network can send you a link (--secret to lock it down)');
   console.log('waiting for peers...');
 });
 

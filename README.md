@@ -92,6 +92,7 @@ A notification says who sent it and what it is. Click it and the link opens in a
 --discovery-port <n>    udp broadcast port (default 38477)
 --peer <host:port>      add a peer by hand, repeatable
 --dir <path>            state directory (default ~/.ezyshare)
+--secret <str>          shared secret, see Security below (default: off)
 ```
 
 `--peer` is the escape hatch for networks that block UDP broadcast (many guest and office APs). Point each machine at the other's LAN IP:
@@ -111,7 +112,31 @@ The daemon exposes two separate surfaces on port 8787:
 
 The custom-header requirement forces a CORS preflight, so a random web page in your browser cannot forge a send. Incoming links are validated as `http`/`https` and never opened automatically — you always click first.
 
-Anyone on the same wifi can send you a link. That is the point, and it is also the limit: do not run this on untrusted public wifi. Pairing/allowlisting is the obvious next step.
+**Sender names are never taken from the network.** The name in a notification comes from the discovery table, matched against the source address of the delivery. A machine that is not a discovered peer shows up as `unknown (192.168.1.x)` and cannot pick the name you see.
+
+**Peer addresses are pinned.** The first address and port a peer is seen on is the one used for delivery. A second machine claiming an already-known peer id is ignored while that peer is still announcing, so links you send cannot be silently redirected. Conflicts are logged:
+
+```text
+! Priya is pinned to 192.168.1.42:8787 but 192.168.1.99:8787 is claiming it - ignoring
+```
+
+A peer that legitimately changes IP goes quiet, ages out after 12s, and is rediscovered normally.
+
+### Locking it down with a shared secret
+
+By default any ezyshare on the LAN can reach you. Set the same secret on every machine and only those machines can see each other or deliver to you:
+
+```bash
+./start.sh --name "Your Name" --secret "some long shared phrase"
+```
+
+Also readable from `EZYSHARE_SECRET` or a file at `~/.ezyshare/secret`, which is easier to use with the autostart installers than a flag.
+
+With a secret set, discovery announces and `/inbox` deliveries carry an HMAC-SHA256 over their contents plus a timestamp and a one-shot nonce, so they cannot be forged, altered, or replayed. Unsigned traffic is dropped: a machine without the secret does not appear in your side panel and gets `401` if it posts to you. Peers may also move address faster, because a new address is accepted once it answers a nonce challenge instead of waiting to age out.
+
+Leaving the secret unset keeps the original open behaviour, so upgrading one machine before the others changes nothing.
+
+Anyone on the same wifi can send you a link unless you set a secret. Without one, do not run this on untrusted public wifi.
 
 ## Troubleshooting
 
@@ -128,6 +153,7 @@ Anyone on the same wifi can send you a link. That is the point, and it is also t
 ## Known limits
 
 - Links only, no files.
-- No pairing yet: any ezyshare daemon on the LAN can send to you.
-- Traffic is plain HTTP on the LAN.
+- Without `--secret`, any ezyshare daemon on the LAN can still send to you — it just cannot choose the name you see or redirect links you send.
+- Traffic is plain HTTP on the LAN. The shared secret authenticates messages; it does not encrypt them, so anyone on the wire can still read the links.
+- Without a secret, a daemon that claims a peer id *before* the real peer appears keeps it until it goes quiet. Set a secret if that matters.
 - Chrome / Chromium only. Daemon runs on macOS, Windows and Linux.
