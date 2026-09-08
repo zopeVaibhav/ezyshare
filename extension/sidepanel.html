@@ -4,14 +4,22 @@
 <link rel="stylesheet" href="sidepanel.css">
 <header>
   <div class="brand">ezyshare</div>
-  <div class="me"><span id="dot" class="dot"></span><span id="myname">connecting…</span></div>
+  <label class="switch" title="Turn sharing on or off">
+    <input type="checkbox" id="toggle">
+    <span class="track"><span class="knob"></span></span>
+  </label>
 </header>
+<div class="me"><span id="dot" class="dot"></span><span id="myname">connecting…</span></div>
 
 <section id="offline" hidden>
   <p class="warn">Daemon not running.</p>
   <p class="hint">Start it, then hit refresh:</p>
   <code>node daemon/ezyshare.mjs</code>
   <p class="hint" id="errline"></p>
+</section>
+
+<section id="paused" hidden>
+  <p class="empty">Sharing is off.<br>You are invisible to everyone and links are refused.<br>Flip the switch to come back online.</p>
 </section>
 
 <section id="main" hidden>

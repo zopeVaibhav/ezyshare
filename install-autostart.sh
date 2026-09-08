@@ -5,7 +5,20 @@ DIR="$(cd "$(dirname "$0")" && pwd)"
 NODE="$(command -v node)"
 LABEL="com.ezyshare.daemon"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
-NAME="${1:-$(scutil --get ComputerName 2>/dev/null || hostname -s)}"
+# No argument is the normal case: the daemon uses this Mac's own name.
+# An explicit override is written verbatim into a login item, so it is restricted to
+# characters that cannot break out of the plist XML or add extra ProgramArguments.
+NAME="${1:-}"
+NAME_ARGS=""
+if [ -n "$NAME" ]; then
+  if ! printf '%s' "$NAME" | grep -Eq '^[A-Za-z0-9 ._-]{1,64}$'; then
+    echo "bad name: use 1-64 chars from letters, digits, space, dot, underscore, hyphen" >&2
+    exit 1
+  fi
+  NAME_ARGS="
+    <string>--name</string>
+    <string>$NAME</string>"
+fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.ezyshare"
 cat > "$PLIST" <<PLISTEOF
@@ -17,9 +30,7 @@ cat > "$PLIST" <<PLISTEOF
   <key>ProgramArguments</key>
   <array>
     <string>$NODE</string>
-    <string>$DIR/daemon/ezyshare.mjs</string>
-    <string>--name</string>
-    <string>$NAME</string>
+    <string>$DIR/daemon/ezyshare.mjs</string>$NAME_ARGS
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -31,6 +42,6 @@ PLISTEOF
 
 launchctl unload "$PLIST" 2>/dev/null || true
 launchctl load "$PLIST"
-echo "installed: $LABEL  (name: $NAME)"
+echo "installed: $LABEL  (name: ${NAME:-auto})"
 echo "logs:      ~/.ezyshare/daemon.log"
 echo "remove:    launchctl unload $PLIST && rm $PLIST"

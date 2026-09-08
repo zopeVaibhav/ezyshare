@@ -3,6 +3,8 @@ import { api, sendLink } from './shared.js';
 const NOTIF_PREFIX = 'ezyshare:';
 const ALARM = 'ezyshare-pump';
 const MENU_ROOT = 'ezyshare-root';
+const MAX_TRACKED_LINKS = 50;
+const BATCH_NOTIFY_LIMIT = 3;
 
 // ---------------------------------------------------------------- inbox
 
@@ -16,8 +18,17 @@ async function pump() {
     for (;;) {
       const { seq = 0 } = await chrome.storage.local.get('seq');
       const data = await api(`/api/inbox?since=${seq}&wait=25000`);
+
+      // The daemon's counter only ever climbs. A lower one means its state was reset
+      // (reinstall, deleted inbox.json, different --dir). Without this the extension
+      // would sit at the old high-water mark and silently never deliver again.
+      if (data.seq < seq) {
+        await chrome.storage.local.set({ seq: 0 });
+        continue;
+      }
+
       await chrome.storage.local.set({ seq: data.seq, online: true });
-      for (const item of data.items) await notify(item);
+      await deliver(data.items);
       await refreshBadge();
       await refreshMenus();
     }
@@ -30,25 +41,46 @@ async function pump() {
   }
 }
 
+async function deliver(newItems) {
+  if (!newItems.length) return;
+  // A flood from one machine must not become a wall of sticky notifications.
+  if (newItems.length > BATCH_NOTIFY_LIMIT) {
+    const senders = [...new Set(newItems.map((it) => it.fromName))];
+    chrome.notifications.create(`${NOTIF_PREFIX}batch:${Date.now()}`, {
+      type: 'basic',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
+      title: `${newItems.length} links received`,
+      message: `from ${senders.slice(0, 3).join(', ')}. Open the ezyshare panel to read them.`,
+      priority: 1,
+    });
+    return;
+  }
+  for (const item of newItems) {
+    // One bad item must never break the loop: the seq is already stored, so a throw
+    // here would mark these items consumed and stop delivery for good.
+    try { await notify(item); } catch { /* keep going */ }
+  }
+}
+
 async function notify(item) {
   const id = NOTIF_PREFIX + item.id;
-  const links = (await chrome.storage.session.get('links')).links || {};
-  links[id] = item.url;
+  const stored = (await chrome.storage.session.get('links')).links || {};
+  const entries = Object.entries(stored).slice(-(MAX_TRACKED_LINKS - 1));
+  const links = Object.fromEntries([...entries, [id, item.url]]);
   await chrome.storage.session.set({ links });
 
   let label = item.title;
   if (!label) {
-    try { label = new URL(item.url).hostname + new URL(item.url).pathname; } catch { label = item.url; }
+    try { const u = new URL(item.url); label = u.hostname + u.pathname; } catch { label = item.url; }
   }
 
   chrome.notifications.create(id, {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-    title: `${item.fromName} sent you a link`,
+    title: item.verified === false ? `Unverified sender (${item.fromName})` : `${item.fromName} sent you a link`,
     message: label,
     contextMessage: item.url.slice(0, 120),
     buttons: [{ title: 'Open' }],
-    requireInteraction: true,
     priority: 2,
   });
 }
@@ -81,21 +113,29 @@ async function refreshBadge() {
 
 // ---------------------------------------------------------------- right-click menu
 
-let menuSignature = '';
+// null, not '': after a worker restart the menus may already exist in Chrome even
+// though this variable is fresh, so the first refresh must always rebuild.
+let menuSignature = null;
 
 async function refreshMenus() {
   let peers = [];
-  try { peers = (await api('/api/peers')).peers; } catch { /* daemon down */ }
-  const signature = peers.map((p) => `${p.id}:${p.name}`).join('|');
+  let enabled = true;
+  try {
+    const data = await api('/api/peers');
+    peers = data.peers;
+    enabled = data.enabled !== false;
+  } catch { enabled = false; }
+
+  const signature = `${enabled}|${peers.map((p) => `${p.id}:${p.name}`).join('|')}`;
   if (signature === menuSignature) return;
   menuSignature = signature;
 
   await chrome.contextMenus.removeAll();
   chrome.contextMenus.create({
     id: MENU_ROOT,
-    title: peers.length ? 'ezyshare to…' : 'ezyshare (no one online)',
+    title: !enabled ? 'ezyshare (sharing off)' : peers.length ? 'ezyshare to…' : 'ezyshare (no one online)',
     contexts: ['link', 'page', 'selection'],
-    enabled: peers.length > 0,
+    enabled: enabled && peers.length > 0,
   });
   for (const p of peers) {
     chrome.contextMenus.create({
@@ -108,8 +148,8 @@ async function refreshMenus() {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (!info.menuItemId.startsWith(`${MENU_ROOT}:`)) return;
-  const peerId = info.menuItemId.slice(MENU_ROOT.length + 1);
+  if (!String(info.menuItemId).startsWith(`${MENU_ROOT}:`)) return;
+  const peerId = String(info.menuItemId).slice(MENU_ROOT.length + 1);
   const url = info.linkUrl || info.pageUrl || tab?.url;
   const title = info.linkUrl ? (info.selectionText || '') : (tab?.title || '');
   try {
@@ -134,6 +174,7 @@ function toast(title, message) {
 
 async function boot() {
   chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   // First run: start from the daemon's current position so a backlog of old
   // links does not arrive as a wall of notifications.
   const stored = await chrome.storage.local.get('seq');
@@ -141,7 +182,6 @@ async function boot() {
     try { await chrome.storage.local.set({ seq: (await api('/api/me')).seq }); }
     catch { await chrome.storage.local.set({ seq: 0 }); }
   }
-  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
   pump();
   refreshMenus();
 }
