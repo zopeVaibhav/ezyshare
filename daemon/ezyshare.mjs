@@ -27,7 +27,7 @@ const PEER_HEADER = 'x-ezyshare-peer';
 // ---------------------------------------------------------------- args
 
 function parseArgs(argv) {
-  const out = { name: null, port: HTTP_PORT_DEFAULT, dport: DISCOVERY_PORT_DEFAULT, peers: [], dir: null, resetPairing: false };
+  const out = { name: null, port: HTTP_PORT_DEFAULT, dport: DISCOVERY_PORT_DEFAULT, peers: [], dir: null, resetPairing: false, secret: null };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     const next = () => argv[++i];
@@ -37,6 +37,7 @@ function parseArgs(argv) {
     else if (a === '--peer') out.peers.push(next());
     else if (a === '--dir') out.dir = next();
     else if (a === '--reset-pairing') out.resetPairing = true;
+    else if (a === '--secret') out.secret = next();
     else if (a === '--help' || a === '-h') { usage(); process.exit(0); }
     else { console.error(`unknown flag: ${a}`); usage(); process.exit(1); }
   }
@@ -54,6 +55,8 @@ function usage() {
   --peer <host:port>      add a peer manually (repeatable, for when broadcast is blocked)
   --dir <path>            state directory (default ~/.ezyshare)
   --reset-pairing         forget the paired extension, so a new one can pair
+  --secret <str>          shared secret; only daemons with the same one can see you or
+                          send to you. Also EZYSHARE_SECRET or <dir>/secret. Off by default.
 `);
 }
 
@@ -110,6 +113,60 @@ if (args.resetPairing) config.extensionOrigin = null;
 function saveConfig() {
   fs.writeFile(configFile, JSON.stringify(config, null, 2), { mode: 0o600 }, () => {});
 }
+
+// ---------------------------------------------------------------- shared secret
+
+// Opt-in. Unset, the daemon behaves exactly as it does without this feature: open to every
+// ezyshare on the LAN, holding only the pinning and sender-verification rules. Set the same
+// value on two machines and every announce and delivery between them is authenticated.
+function loadSecret() {
+  if (args.secret) return args.secret;
+  if (process.env.EZYSHARE_SECRET) return process.env.EZYSHARE_SECRET;
+  try {
+    const fromFile = fs.readFileSync(path.join(STATE_DIR, 'secret'), 'utf8').trim();
+    if (fromFile) return fromFile;
+  } catch { /* no secret file, stay open */ }
+  return null;
+}
+const SECRET = loadSecret();
+
+const CLOCK_SKEW_MS = 30_000;
+
+function hmac(canonical) {
+  return crypto.createHmac('sha256', SECRET).update(canonical).digest('hex');
+}
+
+// Constant-time compare that tolerates a missing or wrong-length candidate.
+function macEquals(expected, got) {
+  if (typeof got !== 'string' || got.length !== expected.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(got));
+}
+
+function withinSkew(ts) {
+  return Number.isFinite(ts) && Math.abs(Date.now() - ts) <= CLOCK_SKEW_MS;
+}
+
+// A signed message is good exactly once, so one captured off the wire cannot be replayed
+// inside the skew window - which a MAC on its own would still allow.
+// The ceiling only has to bound what a sender can put in body.nonce; the announce key is
+// built here from an id, a timestamp and an already length-checked mac, so it is longer.
+const usedNonces = new Map();
+function nonceIsNew(nonce) {
+  if (typeof nonce !== 'string' || nonce.length < 8 || nonce.length > 160) return false;
+  if (usedNonces.has(nonce)) return false;
+  usedNonces.set(nonce, Date.now() + CLOCK_SKEW_MS * 2);
+  return true;
+}
+if (SECRET) {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [n, exp] of usedNonces) if (exp < now) usedNonces.delete(n);
+  }, CLOCK_SKEW_MS).unref();
+}
+
+const announceMac = (id, name, port, ts) => hmac(`hi|${id}|${name}|${port}|${ts}`);
+const whoamiMac = (id, name, port, nonce) => hmac(`whoami|${id}|${name}|${port}|${nonce}`);
+const inboxMac = (rawBody) => hmac(`inbox|${rawBody}`);
 
 // ---------------------------------------------------------------- state
 
@@ -256,7 +313,12 @@ const sock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
 
 function sendAnnounce(target) {
   if (!config.enabled) return;
-  const msg = Buffer.from(JSON.stringify({ t: 'hi', id: SELF_ID, name: SELF_NAME, port: HTTP_PORT }));
+  const body = { t: 'hi', id: SELF_ID, name: SELF_NAME, port: HTTP_PORT };
+  if (SECRET) {
+    body.ts = Date.now();
+    body.mac = announceMac(SELF_ID, SELF_NAME, HTTP_PORT, body.ts);
+  }
+  const msg = Buffer.from(JSON.stringify(body));
   const targets = target ? [target] : broadcastAddresses().map((a) => ({ address: a, port: args.dport }));
   for (const t of targets) {
     sock.send(msg, t.port, t.address, (err) => {
@@ -274,15 +336,23 @@ sock.on('message', (buf, rinfo) => {
   const port = Number(msg.port);
   if (!Number.isInteger(port) || port < 1 || port > 65535) return;
   if (!onLocalSubnet(rinfo.address)) return;
+  // With a secret set, an unsigned, stale or replayed announce is not a peer we know.
+  if (SECRET) {
+    if (!withinSkew(Number(msg.ts))) return;
+    if (!macEquals(announceMac(msg.id, clean(msg.name || 'unknown'), port, msg.ts), msg.mac)) return;
+    if (!nonceIsNew(`hi:${msg.id}:${msg.ts}:${msg.mac}`)) return;
+  }
 
   const existing = peers.get(msg.id);
-  // First address wins for the lifetime of the entry: otherwise anyone who overhears a
-  // broadcast can re-announce that id from their own address and quietly become that peer.
-  if (existing && existing.addr !== rinfo.address) {
+  // First address AND port win for the lifetime of the entry: otherwise anyone who
+  // overhears a broadcast can re-announce that id and quietly become that peer. The port
+  // matters as much as the address - a source-spoofed announce that keeps the address but
+  // moves the port redirects deliveries just as effectively.
+  if (existing && (existing.addr !== rinfo.address || existing.port !== port)) {
     if (Date.now() - existing.lastSeen < PEER_TTL_MS) {
       if (!existing.warned) {
         existing.warned = true;
-        console.warn(`! ignoring second claim on id ${msg.id} from ${rinfo.address} (held by ${existing.addr})`);
+        console.warn(`! ignoring second claim on id ${msg.id} from ${rinfo.address}:${port} (held by ${existing.addr}:${existing.port})`);
       }
       return;
     }
@@ -338,9 +408,12 @@ async function probeManualPeers() {
     const port = at > 0 ? Number(spec.slice(at + 1)) : HTTP_PORT_DEFAULT;
     if (!Number.isInteger(port) || port < 1 || port > 65535) continue;
     try {
-      const res = await fetch(`http://${host}:${port}/whoami`, { signal: AbortSignal.timeout(2000) });
+      const nonce = crypto.randomBytes(16).toString('hex');
+      const res = await fetch(`http://${host}:${port}/whoami?nonce=${nonce}`, { signal: AbortSignal.timeout(2000) });
       const who = await res.json();
       if (typeof who.id !== 'string' || !/^[0-9a-f]{16}$/.test(who.id) || who.id === SELF_ID) continue;
+      // A manual peer must prove it holds the secret too, or --peer would be a way in.
+      if (SECRET && !macEquals(whoamiMac(who.id, clean(who.name), Number(who.port) || port, nonce), who.mac)) continue;
       const existing = peers.get(who.id);
       // A hostile --peer must not be able to take over a peer discovered over UDP.
       if (existing && !existing.manual) continue;
@@ -368,7 +441,10 @@ function readBody(req, limit = 16 * 1024) {
       chunks.push(c);
     });
     req.on('end', () => {
-      try { resolve(chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}); }
+      // The raw text comes back too: /inbox has to authenticate the exact bytes it was
+      // sent, not a re-serialisation of them.
+      const raw = chunks.length ? Buffer.concat(chunks).toString() : '';
+      try { resolve({ data: raw ? JSON.parse(raw) : {}, raw }); }
       catch (e) { reject(e); }
     });
     req.on('error', reject);
@@ -428,7 +504,12 @@ const server = http.createServer(async (req, res) => {
   // ---- LAN surface -------------------------------------------------
   if (route === '/whoami' && req.method === 'GET') {
     if (!config.enabled) return json(res, 503, { error: 'sharing is off' });
-    return json(res, 200, { id: SELF_ID, name: SELF_NAME, port: HTTP_PORT });
+    const body = { id: SELF_ID, name: SELF_NAME, port: HTTP_PORT };
+    // The caller picks the nonce, so a reply recorded from some other exchange cannot be
+    // played back at them.
+    const nonce = url.searchParams.get('nonce');
+    if (SECRET && nonce) body.mac = whoamiMac(SELF_ID, SELF_NAME, HTTP_PORT, nonce);
+    return json(res, 200, body);
   }
 
   if (route === '/inbox' && req.method === 'POST') {
@@ -438,7 +519,14 @@ const server = http.createServer(async (req, res) => {
     if (!inboxLimit(ip)) return json(res, 429, { error: 'slow down' });
 
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    let raw;
+    try { ({ data: body, raw } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
+    // With a secret set, a delivery has to be signed by a daemon holding the same one.
+    if (SECRET) {
+      if (!withinSkew(Number(body.ts))) return json(res, 401, { error: 'stale or unsigned request' });
+      if (!macEquals(inboxMac(raw), req.headers['x-ezyshare-mac'])) return json(res, 401, { error: 'bad signature' });
+      if (!nonceIsNew(String(body.nonce || ''))) return json(res, 401, { error: 'replayed request' });
+    }
     const link = safeUrl(body.url);
     if (!link) return json(res, 400, { error: 'url must be a non-loopback http or https link' });
 
@@ -469,7 +557,7 @@ const server = http.createServer(async (req, res) => {
   if (route === '/api/state') {
     if (req.method === 'POST') {
       let body;
-      try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+      try { ({ data: body } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
       const next = body.enabled === true;
       if (next !== config.enabled) {
         config.enabled = next;
@@ -483,22 +571,32 @@ const server = http.createServer(async (req, res) => {
   }
 
   if (route === '/api/peers') {
-    return json(res, 200, { me: { id: SELF_ID, name: SELF_NAME }, enabled: config.enabled, peers: config.enabled ? peerList() : [] });
+    // `secured` lets the panel tell the user whether a shared secret is in force. It is a
+    // boolean on purpose: the secret itself never leaves the daemon.
+    return json(res, 200, { me: { id: SELF_ID, name: SELF_NAME }, enabled: config.enabled, secured: Boolean(SECRET), peers: config.enabled ? peerList() : [] });
   }
 
   if (route === '/api/send' && req.method === 'POST') {
     if (!config.enabled) return json(res, 409, { error: 'sharing is off' });
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    try { ({ data: body } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
     const peer = peers.get(body.peerId);
     if (!peer) return json(res, 404, { error: 'peer not found' });
     const link = safeUrl(body.url);
     if (!link) return json(res, 400, { error: 'url must be a non-loopback http or https link' });
+    const payload = { fromId: SELF_ID, url: link, title: clean(body.title, 200) };
+    if (SECRET) {
+      payload.ts = Date.now();
+      payload.nonce = crypto.randomBytes(16).toString('hex');
+    }
+    const rawOut = JSON.stringify(payload);
+    const headers = { 'content-type': 'application/json', [PEER_HEADER]: '1' };
+    if (SECRET) headers['x-ezyshare-mac'] = inboxMac(rawOut);
     try {
       const r = await fetch(`http://${peer.addr}:${peer.port}/inbox`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', [PEER_HEADER]: '1' },
-        body: JSON.stringify({ fromId: SELF_ID, url: link, title: clean(body.title, 200) }),
+        headers,
+        body: rawOut,
         signal: AbortSignal.timeout(5000),
       });
       // Deliberately vague: relaying the peer's status or the socket error would turn
@@ -534,7 +632,7 @@ const server = http.createServer(async (req, res) => {
 
   if (route === '/api/inbox/read' && req.method === 'POST') {
     let body;
-    try { body = await readBody(req); } catch { return json(res, 400, { error: 'bad body' }); }
+    try { ({ data: body } = await readBody(req)); } catch { return json(res, 400, { error: 'bad body' }); }
     const ids = new Set(Array.isArray(body.ids) ? body.ids.slice(0, MAX_ITEMS) : []);
     const all = body.all === true;
     for (const it of items) if (all || ids.has(it.id)) it.read = true;
@@ -563,6 +661,9 @@ server.listen(HTTP_PORT, '0.0.0.0', () => {
   console.log(`  http    ${ips.map((ip) => `http://${ip}:${HTTP_PORT}`).join('  ')}`);
   console.log(`  api     http://127.0.0.1:${HTTP_PORT}/api  (paired extension only)`);
   console.log(`  udp     broadcast on ${args.dport}`);
+  console.log(SECRET
+    ? '  secret  on - only daemons sharing this secret can see you or send to you'
+    : '  secret  off - any ezyshare on this network can send you a link (--secret to lock it down)');
   console.log(config.enabled ? 'sharing on. waiting for peers...' : 'sharing off. turn it on from the extension.');
 });
 
