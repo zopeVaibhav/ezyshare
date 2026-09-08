@@ -84,7 +84,8 @@ function renderInbox(items) {
   const recent = [...items].reverse().slice(0, 25);
   el('inbox').replaceChildren(...recent.map((it) => {
     const li = document.createElement('li');
-    li.className = `item${it.read ? '' : ' unread'}`;
+    const unverified = it.verified === false;
+    li.className = `item${it.read ? '' : ' unread'}${unverified ? ' unverified' : ''}`;
     const a = document.createElement('a');
     a.href = it.url;
     a.target = '_blank';
@@ -95,12 +96,16 @@ function renderInbox(items) {
     });
     const sub = document.createElement('span');
     sub.className = 'sub';
-    sub.textContent = `${it.fromName} · ${ago(it.ts)}`;
+    sub.textContent = unverified
+      ? `${it.fromName} · not a known peer · ${ago(it.ts)}`
+      : `${it.fromName} · ${ago(it.ts)}`;
     li.append(a, sub);
     return li;
   }));
   el('noinbox').hidden = recent.length > 0;
 }
+
+let toggleBusy = false;
 
 async function tick() {
   try {
@@ -108,20 +113,41 @@ async function tick() {
       api('/api/peers'),
       api('/api/inbox?since=0&wait=0'),
     ]);
+    const enabled = peerData.enabled !== false;
     el('offline').hidden = true;
-    el('main').hidden = false;
-    el('dot').classList.add('on');
-    el('myname').textContent = peerData.me.name;
+    el('paused').hidden = enabled;
+    el('main').hidden = !enabled;
+    el('toggle').disabled = false;
+    if (!toggleBusy) el('toggle').checked = enabled;
+    el('dot').classList.toggle('on', enabled);
+    el('myname').textContent = enabled ? peerData.me.name : `${peerData.me.name} · hidden`;
     renderPeers(peerData.peers);
     renderInbox(inboxData.items);
   } catch (err) {
     el('offline').hidden = false;
     el('main').hidden = true;
+    el('paused').hidden = true;
+    el('toggle').checked = false;
+    el('toggle').disabled = true;
     el('dot').classList.remove('on');
     el('myname').textContent = 'offline';
     el('errline').textContent = String(err.message || err);
   }
 }
+
+el('toggle').addEventListener('change', async (e) => {
+  const wanted = e.target.checked;
+  toggleBusy = true;
+  try {
+    await api('/api/state', { method: 'POST', body: JSON.stringify({ enabled: wanted }) });
+    chrome.runtime.sendMessage({ type: 'ezyshare:refresh' });
+  } catch {
+    e.target.checked = !wanted;
+  } finally {
+    toggleBusy = false;
+    tick();
+  }
+});
 
 el('refresh').addEventListener('click', () => { chrome.runtime.sendMessage({ type: 'ezyshare:refresh' }); tick(); });
 el('clear').addEventListener('click', async () => {

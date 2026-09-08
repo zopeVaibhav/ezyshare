@@ -17,9 +17,23 @@ body {
   font: 13px/1.5 system-ui, -apple-system, sans-serif;
   background: var(--bg); color: var(--fg);
 }
-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+header { display: flex; justify-content: space-between; align-items: center; }
 .brand { font-weight: 650; letter-spacing: -0.01em; }
-.me { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; }
+.me { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12px; margin: 2px 0 12px; }
+
+.switch { display: inline-flex; cursor: pointer; }
+.switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+.track {
+  width: 34px; height: 20px; border-radius: 999px; background: var(--line);
+  display: block; position: relative; transition: background .15s;
+}
+.knob {
+  position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s;
+}
+.switch input:checked + .track { background: var(--accent); }
+.switch input:checked + .track .knob { transform: translateX(14px); }
+.switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
 .dot.on { background: var(--accent); }
 h2 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 18px 0 6px; }
@@ -54,6 +68,8 @@ ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: col
 .item a { color: inherit; font-weight: 600; text-decoration: none; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item a:hover { text-decoration: underline; }
 .item .sub { color: var(--muted); font-size: 11px; }
+.item.unverified { border-left: 3px solid var(--warn); }
+.item.unverified .sub { color: var(--warn); }
 
 button.ghost {
   margin-top: 10px; width: 100%; padding: 7px;

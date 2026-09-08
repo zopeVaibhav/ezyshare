@@ -29,13 +29,14 @@ Needs Node 18+ on each machine. Check with `node -v`; get it from https://nodejs
 
    macOS / Linux:
    ```bash
-   ./start.sh --name "Your Name"
+   ./start.sh
    ```
 
-   Windows (double-click `start.cmd`, or from a terminal):
-   ```bat
-   start.cmd --name "Your Name"
-   ```
+   Windows: double-click `start.cmd`.
+
+   No arguments needed. Other people see this machine's own name — whatever macOS
+   System Settings, or Windows, already calls it. Override it with `--name "Something Else"`
+   only if you want to.
 
    Approve the firewall prompt the first time so other machines can reach you.
    On Windows tick **Private networks**; on macOS click **Allow**.
@@ -46,13 +47,12 @@ Needs Node 18+ on each machine. Check with `node -v`; get it from https://nodejs
 
 macOS:
 ```bash
-./install-autostart.sh "Your Name"
+./install-autostart.sh
 ```
 
-Windows (double-click, or pass a name):
-```bat
-install-autostart.cmd "Your Name"
-```
+Windows: double-click `install-autostart.cmd`.
+
+Both take an optional name argument, same as `start.sh`.
 Drops a hidden launcher in your Startup folder. Undo with `uninstall-autostart.cmd`.
 
 Linux (systemd user service):
@@ -69,6 +69,17 @@ WantedBy=default.target
 EOF
 systemctl --user enable --now ezyshare
 ```
+
+## Turning it on and off
+
+The daemon runs all the time; the switch in the top right of the side panel controls whether you are actually sharing.
+
+| Switch | What happens |
+| --- | --- |
+| **on** | you broadcast your name, peers see you, `/inbox` accepts links |
+| **off** | broadcasting stops, your peer list empties, `/inbox` and `/whoami` return 503, and you disappear from everyone else's panel within 12 seconds |
+
+The setting is written to `~/.ezyshare/config.json`, so it survives restarts. You never need the terminal for this.
 
 ## Sending a link
 
@@ -92,51 +103,40 @@ A notification says who sent it and what it is. Click it and the link opens in a
 --discovery-port <n>    udp broadcast port (default 38477)
 --peer <host:port>      add a peer by hand, repeatable
 --dir <path>            state directory (default ~/.ezyshare)
---secret <str>          shared secret, see Security below (default: off)
 ```
 
 `--peer` is the escape hatch for networks that block UDP broadcast (many guest and office APs). Point each machine at the other's LAN IP:
 
 ```bash
-./start.sh --name Alpha --peer 192.168.1.42:8787
+./start.sh --peer 192.168.1.42:8787
 ```
 
 ## Security
 
-The daemon exposes two separate surfaces on port 8787:
+The daemon exposes two surfaces on port 8787, guarded differently:
 
-| Route | Who can reach it | What it does |
+| Route | Who can reach it | Gate |
 | --- | --- | --- |
-| `/api/*` | loopback only, `chrome-extension://` origin only, custom header required | the extension's control API |
-| `/inbox`, `/whoami` | anyone on the LAN | receives a link, reports the display name |
+| `/api/*` | the extension | loopback source, **one pinned `chrome-extension://` origin**, and an `X-Ezyshare` header that forces a CORS preflight |
+| `/inbox` | other ezyshare daemons on the LAN | `X-Ezyshare-Peer` header, `application/json` content type, **no `Origin` header**, rate limited |
+| `/whoami` | anyone on the LAN | none, returns display name only |
 
-The custom-header requirement forces a CORS preflight, so a random web page in your browser cannot forge a send. Incoming links are validated as `http`/`https` and never opened automatically — you always click first.
+What that buys you:
 
-**Sender names are never taken from the network.** The name in a notification comes from the discovery table, matched against the source address of the delivery. A machine that is not a discovered peer shows up as `unknown (192.168.1.x)` and cannot pick the name you see.
+- **A web page in your browser cannot send or receive links.** Both routes require a custom header, which a page cannot set without a preflight, and neither route answers a preflight from a web origin. This is the gap that matters: without it, any site you visit could have popped a fake "Alice sent you a link" notification pointing at a phishing page.
+- **Only your extension talks to the API.** The first `chrome-extension://` origin to call `/api` is pinned in `~/.ezyshare/config.json`; any other extension you install gets a 403. Use `--reset-pairing` if you reload the extension under a new ID.
+- **Sender names are verified, not claimed.** An incoming link is labelled with a peer's name only when the claimed ID matches a peer already known at that exact source address. Anything else shows as `unknown (<ip>)` with a red bar in the panel and an "Unverified sender" notification.
+- **Peer IDs cannot be stolen.** A peer ID stays bound to the address that first announced it until its TTL expires, so someone who overhears your broadcast cannot re-announce your ID from their machine and silently receive the links meant for you.
+- **Announces are only accepted from your own subnet**, and the peer list is capped. A spoofed announce pointing at `127.0.0.1` or `169.254.169.254` is dropped, so a click can never be turned into a probe of your own machine. Send errors are deliberately vague for the same reason.
+- **Inbound links must be non-loopback `http`/`https`.** `javascript:`, `file:`, `data:` and `http://127.0.0.1/...` are all refused, on the wire and when reloading `~/.ezyshare/inbox.json` from disk.
+- **Floods are capped**: 12 links per source address per minute, and more than 3 at once collapse into a single notification instead of a wall of sticky ones.
+- **State files** (`id`, `config.json`, `inbox.json`) are written `0600` in a `0700` directory.
 
-**Peer addresses are pinned.** The first address and port a peer is seen on is the one used for delivery. A second machine claiming an already-known peer id is ignored while that peer is still announcing, so links you send cannot be silently redirected. Conflicts are logged:
+What it still does not do:
 
-```text
-! Priya is pinned to 192.168.1.42:8787 but 192.168.1.99:8787 is claiming it - ignoring
-```
-
-A peer that legitimately changes IP goes quiet, ages out after 12s, and is rediscovered normally.
-
-### Locking it down with a shared secret
-
-By default any ezyshare on the LAN can reach you. Set the same secret on every machine and only those machines can see each other or deliver to you:
-
-```bash
-./start.sh --name "Your Name" --secret "some long shared phrase"
-```
-
-Also readable from `EZYSHARE_SECRET` or a file at `~/.ezyshare/secret`, which is easier to use with the autostart installers than a flag.
-
-With a secret set, discovery announces and `/inbox` deliveries carry an HMAC-SHA256 over their contents plus a timestamp and a one-shot nonce, so they cannot be forged, altered, or replayed. Unsigned traffic is dropped: a machine without the secret does not appear in your side panel and gets `401` if it posts to you. Peers may also move address faster, because a new address is accepted once it answers a nonce challenge instead of waiting to age out.
-
-Leaving the secret unset keeps the original open behaviour, so upgrading one machine before the others changes nothing.
-
-Anyone on the same wifi can send you a link unless you set a secret. Without one, do not run this on untrusted public wifi.
+- **No pairing secret.** Any ezyshare daemon on your wifi can send you a link. It will be labelled with a verified name if it is a known peer, but there is no allowlist. Do not run this on public wifi.
+- **Plain HTTP on the LAN.** Anyone who can sniff the network sees the links you share.
+- **`/api` trusts the local machine.** Another user account or a compromised process on your own machine can read your inbox. A token file would fix this and is the obvious next step.
 
 ## Troubleshooting
 
@@ -150,10 +150,13 @@ Anyone on the same wifi can send you a link unless you set a secret. Without one
 
 **No notification** — check Chrome notification permission for the extension in System Settings → Notifications → Google Chrome.
 
+**"another extension is already paired"** — you reloaded the extension and Chrome gave it a new ID. Restart the daemon once with `--reset-pairing`, or delete `extensionOrigin` from `~/.ezyshare/config.json`.
+
+**Everyone vanished and nothing sends** — check the switch in the top right of the side panel. Off means invisible.
+
 ## Known limits
 
 - Links only, no files.
-- Without `--secret`, any ezyshare daemon on the LAN can still send to you — it just cannot choose the name you see or redirect links you send.
-- Traffic is plain HTTP on the LAN. The shared secret authenticates messages; it does not encrypt them, so anyone on the wire can still read the links.
-- Without a secret, a daemon that claims a peer id *before* the real peer appears keeps it until it goes quiet. Set a secret if that matters.
+- No pairing secret yet: any ezyshare daemon on the LAN can send to you, though unknown senders are flagged.
+- Traffic is plain HTTP on the LAN.
 - Chrome / Chromium only. Daemon runs on macOS, Windows and Linux.
