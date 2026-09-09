@@ -130,13 +130,16 @@ What that buys you:
 - **Announces are only accepted from your own subnet**, and the peer list is capped. A spoofed announce pointing at `127.0.0.1` or `169.254.169.254` is dropped, so a click can never be turned into a probe of your own machine. Send errors are deliberately vague for the same reason.
 - **Inbound links must be non-loopback `http`/`https`.** `javascript:`, `file:`, `data:` and `http://127.0.0.1/...` are all refused, on the wire and when reloading `~/.ezyshare/inbox.json` from disk.
 - **Floods are capped**: 12 links per source address per minute, and more than 3 at once collapse into a single notification instead of a wall of sticky ones.
-- **State files** (`id`, `config.json`, `inbox.json`) are written `0600` in a `0700` directory.
+- **State files** (`id`, `config.json`, `inbox.json`) are written `0600` in a `0700` directory, and the daemon re-applies that mode on every start in case an installer created the directory first. The log records hostnames, never full URLs.
+- **A malformed request cannot kill the daemon.** A JSON body that parses to something other than an object is replaced with an empty one, and the process survives an unhandled rejection rather than exiting.
+- **One address cannot fill the peer list.** New peer ids are capped at 4 per source address per minute, so hiding your real peers behind 256 fakes would take 64 distinct machines.
 
 What it still does not do:
 
 - **No pairing secret.** Any ezyshare daemon on your wifi can send you a link. It will be labelled with a verified name if it is a known peer, but there is no allowlist. Do not run this on public wifi.
 - **Plain HTTP on the LAN.** Anyone who can sniff the network sees the links you share.
-- **`/api` trusts the local machine.** Another user account or a compromised process on your own machine can read your inbox. A token file would fix this and is the obvious next step.
+- **`/api` trusts the local machine.** Another user account or a compromised process on your own machine can read your inbox, clear it, turn sharing off, and send links as you — the origin pin only constrains callers that send an `Origin` header, and a non-browser caller simply omits it. A token file read by both sides would fix this.
+- **Verification is by source address.** Two peers behind the same address — anything on your own machine, or a manual `--peer` pointing at localhost — can claim each other's identity.
 
 ## Troubleshooting
 

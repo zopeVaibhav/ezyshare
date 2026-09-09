@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execFileSync } from 'node:child_process';
+import dns from 'node:dns';
 
 const DISCOVERY_PORT_DEFAULT = 38477;
 const HTTP_PORT_DEFAULT = 8787;
@@ -63,6 +64,9 @@ function usage() {
 const args = parseArgs(process.argv.slice(2));
 const STATE_DIR = args.dir || path.join(os.homedir(), '.ezyshare');
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
+// mkdirSync only applies the mode when it creates the directory. The installer may have
+// made it first under the login umask, leaving the log world-readable.
+try { fs.chmodSync(STATE_DIR, 0o700); } catch { /* not ours to fix */ }
 
 // Peer names, titles and log lines all come from the network. Keep them short, and strip
 // every control and format character: those are what smuggle ANSI escapes into the
@@ -183,7 +187,7 @@ function sanitizeItem(raw) {
   const url = safeUrl(raw.url);
   if (!url) return null;
   return {
-    seq: Number.isSafeInteger(raw.seq) && raw.seq > 0 ? raw.seq : 0,
+    seq: Number.isSafeInteger(raw.seq) && raw.seq > 0 ? raw.seq : null,
     id: /^[0-9a-f]{6,32}$/.test(raw.id) ? raw.id : crypto.randomBytes(6).toString('hex'),
     fromId: /^[0-9a-f]{0,32}$/.test(raw.fromId) ? raw.fromId : '',
     fromName: clean(raw.fromName || 'unknown'),
@@ -191,12 +195,19 @@ function sanitizeItem(raw) {
     title: clean(raw.title, 200),
     ts: Number.isSafeInteger(raw.ts) ? raw.ts : Date.now(),
     read: raw.read === true,
+    // Fail closed: an item whose flag did not survive is treated as unverified, never
+    // silently promoted to looking like it came from a known peer.
+    verified: raw.verified === true,
   };
 }
 
 try {
   const saved = JSON.parse(fs.readFileSync(inboxFile, 'utf8'));
   items = (Array.isArray(saved.items) ? saved.items : []).map(sanitizeItem).filter(Boolean).slice(-MAX_ITEMS);
+  // An item with no usable seq would sit below every `since` value and be invisible
+  // forever while still occupying a slot. Renumber instead of zeroing.
+  let next = items.reduce((m, it) => Math.max(m, it.seq || 0), 0);
+  for (const it of items) if (it.seq === null) it.seq = ++next;
   const highest = items.reduce((m, it) => Math.max(m, it.seq), 0);
   // Keep the counter monotonic across restarts, but never let a tampered file push it
   // somewhere absurd: the extension tracks this number and would go quiet.
@@ -232,20 +243,36 @@ function addItem(item) {
 
 // ---------------------------------------------------------------- rate limiting
 
+const LIMITER_KEYS = 4096;
+
 function makeLimiter(limit, windowMs) {
   const seen = new Map();
   return (key) => {
     const now = Date.now();
     const entry = seen.get(key);
-    if (!entry || now - entry.start > windowMs) { seen.set(key, { start: now, count: 1 }); return true; }
-    if (seen.size > 4096) seen.clear();
-    entry.count += 1;
-    return entry.count <= limit;
+    if (entry && now - entry.start <= windowMs) {
+      entry.count += 1;
+      return entry.count <= limit;
+    }
+    if (!entry && seen.size >= LIMITER_KEYS) {
+      // Never drop a live bucket to make room: clearing the map, or evicting the oldest
+      // key, both let a flood of fresh keys reset the counter of an address that is
+      // already over its limit. Reclaim only expired buckets, and if the table is still
+      // full, refuse to track the new key at all - which denies the flooder, not the victim.
+      for (const [k, v] of seen) {
+        if (now - v.start > windowMs) seen.delete(k);
+        if (seen.size < LIMITER_KEYS) break;
+      }
+      if (seen.size >= LIMITER_KEYS) return false;
+    }
+    seen.set(key, { start: now, count: 1 });
+    return true;
   };
 }
 
 const inboxLimit = makeLimiter(12, 60_000);   // links accepted per source address per minute
 const replyLimit = makeLimiter(1, 10_000);    // unsolicited announce replies per source address
+const announceLimit = makeLimiter(4, 60_000); // *new* peer ids accepted per source address per minute
 
 // ---------------------------------------------------------------- addressing
 
@@ -263,10 +290,16 @@ function toInt(ip) {
 // Only trust announces coming from an address on one of our own IPv4 subnets. This blocks
 // the spoofed loopback / link-local / metadata-endpoint peer that would turn /api/send
 // into a port scanner for the victim's own machine.
+let subnetCache = { at: 0, list: [] };
+function localSubnets() {
+  if (Date.now() - subnetCache.at > 30_000) subnetCache = { at: Date.now(), list: ipv4Interfaces() };
+  return subnetCache.list;
+}
+
 function onLocalSubnet(ip) {
   const value = toInt(ip);
   if (value === null) return false;
-  for (const ni of ipv4Interfaces()) {
+  for (const ni of localSubnets()) {
     const net = toInt(ni.address);
     const mask = toInt(ni.netmask);
     if (net === null || mask === null) continue;
@@ -275,9 +308,15 @@ function onLocalSubnet(ip) {
   return false;
 }
 
+// The WHATWG URL parser already normalises 127.1, 2130706433, 0x7f000001 and friends
+// down to 127.0.0.1. These are the spellings it does NOT collapse, and every one of them
+// still reaches the recipient's own machine.
 function isLoopbackHost(host) {
-  const bare = host.replace(/^\[|\]$/g, '').toLowerCase();
-  if (bare === 'localhost' || bare.endsWith('.localhost') || bare === '::1') return true;
+  const bare = host.replace(/^\[|\]$/g, '').toLowerCase().replace(/\.$/, '');
+  if (bare === 'localhost' || bare.endsWith('.localhost')) return true;
+  if (bare === '::1' || bare === '::' || bare === '0.0.0.0' || bare === '0') return true;
+  if (/^::ffff:(7f[0-9a-f]{2}:|0:0)/.test(bare)) return true;   // IPv4-mapped 127.x and 0.0.0.0
+  if (/^169\.254\./.test(bare)) return true;                    // link-local, incl. cloud metadata
   return /^127\./.test(bare);
 }
 
@@ -357,7 +396,17 @@ sock.on('message', (buf, rinfo) => {
       return;
     }
   }
-  if (!existing && peers.size >= MAX_PEERS) return;
+  if (!existing) {
+    // Rejecting at the cap turned unbounded growth into a lockout: 256 packets of random
+    // ids from one address hid every real peer. Rate limit new ids per source, and when
+    // the map is full evict the stalest entry instead of refusing the newcomer.
+    if (!announceLimit(rinfo.address)) return;
+    if (peers.size >= MAX_PEERS) {
+      const stalest = [...peers.values()].sort((a, b) => a.lastSeen - b.lastSeen)[0];
+      if (!stalest) return;
+      peers.delete(stalest.id);
+    }
+  }
 
   peers.set(msg.id, {
     id: msg.id,
@@ -392,7 +441,7 @@ sock.bind(args.dport, () => {
 setInterval(() => {
   const now = Date.now();
   for (const [id, p] of peers) {
-    if (!p.manual && now - p.lastSeen > PEER_TTL_MS) {
+    if (now - p.lastSeen > PEER_TTL_MS) {
       peers.delete(id);
       console.log(`- ${p.name}`);
     }
@@ -417,7 +466,11 @@ async function probeManualPeers() {
       const existing = peers.get(who.id);
       // A hostile --peer must not be able to take over a peer discovered over UDP.
       if (existing && !existing.manual) continue;
-      peers.set(who.id, { id: who.id, name: clean(who.name), addr: host, port, lastSeen: Date.now(), manual: true });
+      if (!existing && peers.size >= MAX_PEERS) continue;
+      // Store the resolved address, not the operator's string: sender verification
+      // compares against the socket's IP, which a hostname could never match.
+      const { address } = await dns.promises.lookup(host, { family: 4 });
+      peers.set(who.id, { id: who.id, name: clean(who.name), addr: address, port, lastSeen: Date.now(), manual: true });
     } catch { /* peer offline */ }
   }
 }
@@ -444,8 +497,13 @@ function readBody(req, limit = 16 * 1024) {
       // The raw text comes back too: /inbox has to authenticate the exact bytes it was
       // sent, not a re-serialisation of them.
       const raw = chunks.length ? Buffer.concat(chunks).toString() : '';
-      try { resolve({ data: raw ? JSON.parse(raw) : {}, raw }); }
-      catch (e) { reject(e); }
+      try {
+        const parsed = raw ? JSON.parse(raw) : {};
+        // "null", "[]" and "\"x\"" are all valid JSON. Handlers read properties off this
+        // value, and a throw inside an async request listener is an unhandled rejection,
+        // which kills the process. Anything that is not a plain object becomes {}.
+        resolve({ data: parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}, raw });
+      } catch (e) { reject(e); }
     });
     req.on('error', reject);
   });
@@ -471,12 +529,8 @@ function guardApi(req, res) {
   if (!['127.0.0.1', '::1'].includes(remoteIp(req))) { json(res, 403, { error: 'loopback only' }); return false; }
   const origin = req.headers.origin;
   if (origin) {
-    if (!origin.startsWith('chrome-extension://')) { json(res, 403, { error: 'bad origin' }); return false; }
-    if (!config.extensionOrigin) {
-      config.extensionOrigin = origin;
-      saveConfig();
-      console.log(`paired with extension ${origin}`);
-    } else if (config.extensionOrigin !== origin) {
+    if (!/^chrome-extension:\/\/[a-p]{32}$/.test(origin)) { json(res, 403, { error: 'bad origin' }); return false; }
+    if (config.extensionOrigin && config.extensionOrigin !== origin) {
       json(res, 403, { error: 'another extension is already paired; run with --reset-pairing to change it' });
       return false;
     }
@@ -488,6 +542,14 @@ function guardApi(req, res) {
   }
   if (req.method === 'OPTIONS') { res.writeHead(204); res.end(); return false; }
   if (!req.headers['x-ezyshare']) { json(res, 403, { error: 'missing x-ezyshare header' }); return false; }
+  // Pin only once the request has cleared every check. Doing it earlier let any local
+  // process burn the one-time pairing slot with a request that was then rejected,
+  // locking the real extension out until --reset-pairing.
+  if (origin && !config.extensionOrigin) {
+    config.extensionOrigin = origin;
+    saveConfig();
+    console.log(`paired with extension ${clean(origin, 128)}`);
+  }
   return true;
 }
 
@@ -542,7 +604,7 @@ const server = http.createServer(async (req, res) => {
       title: clean(body.title, 200),
       verified: Boolean(verified),
     });
-    console.log(`  in  ${item.fromName}: ${item.url}`);
+    console.log(`  in  ${item.fromName}: ${new URL(item.url).hostname}`);
     return json(res, 200, { ok: true });
   }
 
@@ -605,7 +667,7 @@ const server = http.createServer(async (req, res) => {
     } catch {
       return json(res, 502, { error: `could not reach ${peer.name}` });
     }
-    console.log(`  out ${peer.name}: ${link}`);
+    console.log(`  out ${peer.name}: ${new URL(link).hostname}`);
     return json(res, 200, { ok: true, to: peer.name });
   }
 
@@ -666,6 +728,11 @@ server.listen(HTTP_PORT, '0.0.0.0', () => {
     : '  secret  off - any ezyshare on this network can send you a link (--secret to lock it down)');
   console.log(config.enabled ? 'sharing on. waiting for peers...' : 'sharing off. turn it on from the extension.');
 });
+
+// No single malformed request should be able to take the daemon down.
+process.on('unhandledRejection', (err) => console.error('unhandled rejection:', err?.message || err));
+process.on('uncaughtException', (err) => console.error('uncaught exception:', err?.message || err));
+server.on('clientError', (err, socket) => { if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); });
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, () => { console.log('\nbye'); process.exit(0); });

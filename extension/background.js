@@ -77,7 +77,7 @@ async function notify(item) {
   chrome.notifications.create(id, {
     type: 'basic',
     iconUrl: chrome.runtime.getURL('icons/icon128.png'),
-    title: item.verified === false ? `Unverified sender (${item.fromName})` : `${item.fromName} sent you a link`,
+    title: item.verified !== true ? `Unverified sender (${item.fromName})` : `${item.fromName} sent you a link`,
     message: label,
     contextMessage: item.url.slice(0, 120),
     buttons: [{ title: 'Open' }],
@@ -86,6 +86,15 @@ async function notify(item) {
 }
 
 async function openFromNotification(notificationId) {
+  // Three id shapes reach this handler. Only per-item ones carry a link: a "N links
+  // received" summary and a send-status toast must not slice a bogus id and post it.
+  if (!notificationId.startsWith(NOTIF_PREFIX)) { chrome.notifications.clear(notificationId); return; }
+  if (notificationId.startsWith(`${NOTIF_PREFIX}batch:`)) {
+    chrome.notifications.clear(notificationId);
+    try { await api('/api/inbox/read', { method: 'POST', body: JSON.stringify({ all: true }) }); } catch { /* offline */ }
+    refreshBadge();
+    return;
+  }
   const links = (await chrome.storage.session.get('links')).links || {};
   const url = links[notificationId];
   if (url) {
