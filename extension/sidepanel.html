@@ -1,50 +1,55 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ezyshare</title>
-<link rel="stylesheet" href="sidepanel.css">
-</head>
-<body>
-<header>
-  <div class="brand">ezyshare</div>
-  <label class="switch" title="Turn sharing on or off">
-    <input type="checkbox" id="toggle">
-    <span class="track"><span class="knob"></span></span>
-    <span class="sr-only">Sharing</span>
-  </label>
-</header>
-<div class="me">
-  <span id="dot" class="dot"></span>
-  <span id="myname">connecting…</span>
-  <span id="lock" class="chip" hidden></span>
-</div>
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>ezyshare</title>
+        <link rel="stylesheet" href="sidepanel.css" />
+    </head>
+    <body>
+        <header>
+            <div class="brand">ezyshare</div>
+            <label class="switch" title="Turn sharing on or off">
+                <input type="checkbox" id="toggle" />
+                <span class="track"><span class="knob"></span></span>
+                <span class="sr-only">Sharing</span>
+            </label>
+        </header>
+        <div class="me">
+            <span id="dot" class="dot"></span>
+            <span id="myname">connecting…</span>
+            <span id="lock" class="chip" hidden></span>
+        </div>
 
-<section id="offline" hidden>
-  <p class="warn">Daemon not running.</p>
-  <p class="hint">Start it, then hit refresh:</p>
-  <code>node daemon/ezyshare.mjs</code>
-  <p class="hint" id="errline"></p>
-</section>
+        <section id="offline" hidden>
+            <p class="warn">Daemon not running.</p>
+            <p class="hint">Start it, then hit refresh:</p>
+            <code>node daemon/ezyshare.mjs</code>
+            <p class="hint" id="errline"></p>
+        </section>
 
-<section id="paused" hidden>
-  <p class="empty">Sharing is off.<br>You are invisible to everyone and links are refused.<br>Flip the switch to come back online.</p>
-</section>
+        <section id="paused" hidden>
+            <p class="empty">
+                Sharing is off.<br />You are invisible to everyone and links are refused.<br />Flip
+                the switch to come back online.
+            </p>
+        </section>
 
-<section id="main" hidden>
-  <p class="hint">Drag a link onto a name. Or click a card to send the current tab.</p>
-  <ul id="peers" aria-label="People on this network"></ul>
-  <p id="nopeers" class="empty" hidden>No one else online yet.<br>Same wifi, daemon running on both machines.</p>
+        <section id="main" hidden>
+            <p class="hint">Drag a link onto a name. Or click a card to send the current tab.</p>
+            <ul id="peers" aria-label="People on this network"></ul>
+            <p id="nopeers" class="empty" hidden>
+                No one else online yet.<br />Same wifi, daemon running on both machines.
+            </p>
 
-  <h2>Received <span id="unread" class="count" hidden></span></h2>
-  <ul id="inbox" aria-label="Received links"></ul>
-  <p id="noinbox" class="empty" hidden>Nothing yet.</p>
-  <button type="button" id="clear" class="ghost">Clear received</button>
-</section>
+            <h2>Received <span id="unread" class="count" hidden></span></h2>
+            <ul id="inbox" aria-label="Received links"></ul>
+            <p id="noinbox" class="empty" hidden>Nothing yet.</p>
+            <button type="button" id="clear" class="ghost">Clear received</button>
+        </section>
 
-<footer><button type="button" id="refresh" class="ghost">Refresh</button></footer>
-<div id="live" class="sr-only" role="status" aria-live="polite"></div>
-<script type="module" src="sidepanel.js"></script>
-</body>
+        <footer><button type="button" id="refresh" class="ghost">Refresh</button></footer>
+        <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+        <script type="module" src="sidepanel.js"></script>
+    </body>
 </html>
