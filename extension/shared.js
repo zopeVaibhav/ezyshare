@@ -1,9 +1,10 @@
-// Shared helpers for talking to the local ezyshare daemon.
 const PORTS = [8787, 8788, 8789, 8790];
 let base = null;
 
-// The daemon tells people to try --port 8788 when 8787 is busy, so hunting for it beats
-// hardcoding one port and reporting "daemon not running" forever.
+/*
+  The daemon suggests --port 8788 when 8787 is busy, so hunt for it rather than
+  hardcoding one port and reporting "daemon not running" forever.
+*/
 async function resolveBase() {
     if (base) return base;
     const { daemonPort } = await chrome.storage.local.get("daemonPort");

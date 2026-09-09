@@ -1,11 +1,4 @@
 #!/usr/bin/env node
-// ezyshare daemon - LAN peer discovery + link inbox for the ezyshare Chrome extension.
-// Zero dependencies. Node >= 18.
-//
-// Three surfaces on one HTTP server:
-//   /api/*            loopback only, one pinned chrome-extension:// origin, custom header required
-//   /inbox            LAN, peer-to-peer link delivery, custom header + JSON content type required
-//   /whoami           LAN, identity probe (used by manual --peer entries)
 
 import http from "node:http";
 import dgram from "node:dgram";
@@ -16,6 +9,12 @@ import crypto from "node:crypto";
 import { execFileSync } from "node:child_process";
 import dns from "node:dns";
 
+/*
+  Three surfaces share one HTTP server, each with its own trust level:
+  /api/*   loopback only, one pinned chrome-extension:// origin, X-Ezyshare header
+  /inbox   LAN peers only, X-Ezyshare-Peer header, JSON body, no Origin
+  /whoami  anyone on the LAN, identity only
+*/
 const DISCOVERY_PORT_DEFAULT = 38477;
 const HTTP_PORT_DEFAULT = 8787;
 const ANNOUNCE_INTERVAL_MS = 3000;
@@ -24,8 +23,6 @@ const MAX_ITEMS = 200;
 const MAX_PEERS = 256;
 const MAX_NAME = 64;
 const PEER_HEADER = "x-ezyshare-peer";
-
-// ---------------------------------------------------------------- args
 
 function parseArgs(argv) {
     const out = {
@@ -84,26 +81,26 @@ function usage() {
 const args = parseArgs(process.argv.slice(2));
 const STATE_DIR = args.dir || path.join(os.homedir(), ".ezyshare");
 fs.mkdirSync(STATE_DIR, { recursive: true, mode: 0o700 });
-// mkdirSync only applies the mode when it creates the directory. The installer may have
-// made it first under the login umask, leaving the log world-readable.
 try {
+    /*
+      mkdirSync only applies the mode when it creates the directory, and an installer
+      may have made it first under the login umask.
+    */
     fs.chmodSync(STATE_DIR, 0o700);
 } catch {
     /* not ours to fix */
 }
 
-// Peer names, titles and log lines all come from the network. Keep them short, and strip
-// every control and format character: those are what smuggle ANSI escapes into the
-// operator's terminal and bidi overrides into the panel. Ordinary Unicode survives, so
-// "Vaibhav's MacBook Air" keeps its curly apostrophe.
+/*
+  Strips control and format characters, which is what smuggles ANSI escapes into the
+  operator's terminal and bidi overrides into the panel. Ordinary Unicode survives.
+*/
 function clean(value, max = MAX_NAME) {
     return String(value ?? "")
         .replace(/\p{C}/gu, "")
         .slice(0, max)
         .trim();
 }
-
-// ---------------------------------------------------------------- identity + config
 
 const idFile = path.join(STATE_DIR, "id");
 let SELF_ID;
@@ -114,8 +111,6 @@ try {
     SELF_ID = crypto.randomBytes(8).toString("hex");
     fs.writeFileSync(idFile, SELF_ID, { mode: 0o600 });
 }
-// The name people see. Prefer whatever the OS calls this machine in its own settings
-// ("Vaibhav's MacBook Air") over the network hostname ("Vaibhavs-MacBook-Air.local").
 function machineName() {
     if (process.platform === "darwin") {
         try {
@@ -155,11 +150,6 @@ function saveConfig() {
     fs.writeFile(configFile, JSON.stringify(config, null, 2), { mode: 0o600 }, () => {});
 }
 
-// ---------------------------------------------------------------- shared secret
-
-// Opt-in. Unset, the daemon behaves exactly as it does without this feature: open to every
-// ezyshare on the LAN, holding only the pinning and sender-verification rules. Set the same
-// value on two machines and every announce and delivery between them is authenticated.
 function loadSecret() {
     if (args.secret) return args.secret;
     if (process.env.EZYSHARE_SECRET) return process.env.EZYSHARE_SECRET;
@@ -179,7 +169,6 @@ function hmac(canonical) {
     return crypto.createHmac("sha256", SECRET).update(canonical).digest("hex");
 }
 
-// Constant-time compare that tolerates a missing or wrong-length candidate.
 function macEquals(expected, got) {
     if (typeof got !== "string" || got.length !== expected.length) return false;
     return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(got));
@@ -189,10 +178,10 @@ function withinSkew(ts) {
     return Number.isFinite(ts) && Math.abs(Date.now() - ts) <= CLOCK_SKEW_MS;
 }
 
-// A signed message is good exactly once, so one captured off the wire cannot be replayed
-// inside the skew window - which a MAC on its own would still allow.
-// The ceiling only has to bound what a sender can put in body.nonce; the announce key is
-// built here from an id, a timestamp and an already length-checked mac, so it is longer.
+/*
+  A signed message is good exactly once, so one captured off the wire cannot be
+  replayed inside the skew window, which a MAC on its own would still allow.
+*/
 const usedNonces = new Map();
 function nonceIsNew(nonce) {
     if (typeof nonce !== "string" || nonce.length < 8 || nonce.length > 160) return false;
@@ -211,8 +200,6 @@ const announceMac = (id, name, port, ts) => hmac(`hi|${id}|${name}|${port}|${ts}
 const whoamiMac = (id, name, port, nonce) => hmac(`whoami|${id}|${name}|${port}|${nonce}`);
 const inboxMac = (rawBody) => hmac(`inbox|${rawBody}`);
 
-// ---------------------------------------------------------------- state
-
 /** @type {Map<string, {id:string,name:string,addr:string,port:number,lastSeen:number,manual:boolean}>} */
 const peers = new Map();
 
@@ -220,8 +207,12 @@ const inboxFile = path.join(STATE_DIR, "inbox.json");
 let items = [];
 let seq = 0;
 
+/*
+  Everything on disk is untrusted: a stale backup, a synced home directory, another
+  local user. An item whose verified flag did not survive is treated as unverified
+  rather than promoted to looking like it came from a known peer.
+*/
 function sanitizeItem(raw) {
-    // Anything on disk is untrusted: a stale backup, a synced home dir, another local user.
     if (!raw || typeof raw !== "object") return null;
     const url = safeUrl(raw.url);
     if (!url) return null;
@@ -234,8 +225,6 @@ function sanitizeItem(raw) {
         title: clean(raw.title, 200),
         ts: Number.isSafeInteger(raw.ts) ? raw.ts : Date.now(),
         read: raw.read === true,
-        // Fail closed: an item whose flag did not survive is treated as unverified, never
-        // silently promoted to looking like it came from a known peer.
         verified: raw.verified === true,
     };
 }
@@ -246,13 +235,13 @@ try {
         .map(sanitizeItem)
         .filter(Boolean)
         .slice(-MAX_ITEMS);
-    // An item with no usable seq would sit below every `since` value and be invisible
-    // forever while still occupying a slot. Renumber instead of zeroing.
+    /*
+      An item with no usable seq would sit below every `since` value and stay invisible
+      forever while still occupying a slot.
+    */
     let next = items.reduce((m, it) => Math.max(m, it.seq || 0), 0);
     for (const it of items) if (it.seq === null) it.seq = ++next;
     const highest = items.reduce((m, it) => Math.max(m, it.seq), 0);
-    // Keep the counter monotonic across restarts, but never let a tampered file push it
-    // somewhere absurd: the extension tracks this number and would go quiet.
     const claimed = Number.isSafeInteger(saved.seq) ? saved.seq : 0;
     seq = claimed >= highest && claimed <= highest + 1_000_000 ? claimed : highest;
 } catch {
@@ -291,8 +280,6 @@ function addItem(item) {
     return full;
 }
 
-// ---------------------------------------------------------------- rate limiting
-
 const LIMITER_KEYS = 4096;
 
 function makeLimiter(limit, windowMs) {
@@ -305,10 +292,11 @@ function makeLimiter(limit, windowMs) {
             return entry.count <= limit;
         }
         if (!entry && seen.size >= LIMITER_KEYS) {
-            // Never drop a live bucket to make room: clearing the map, or evicting the oldest
-            // key, both let a flood of fresh keys reset the counter of an address that is
-            // already over its limit. Reclaim only expired buckets, and if the table is still
-            // full, refuse to track the new key at all - which denies the flooder, not the victim.
+            /*
+              Never drop a live bucket to make room. Clearing the map, or evicting the oldest key,
+              both let a flood of fresh keys reset the counter of an address already over its
+              limit. Reclaim expired buckets only, then deny the flooder rather than the victim.
+            */
             for (const [k, v] of seen) {
                 if (now - v.start > windowMs) seen.delete(k);
                 if (seen.size < LIMITER_KEYS) break;
@@ -324,8 +312,6 @@ const inboxLimit = makeLimiter(12, 60_000); // links accepted per source address
 const replyLimit = makeLimiter(1, 10_000); // unsolicited announce replies per source address
 const announceLimit = makeLimiter(4, 60_000); // *new* peer ids accepted per source address per minute
 
-// ---------------------------------------------------------------- addressing
-
 function ipv4Interfaces() {
     return Object.values(os.networkInterfaces())
         .flat()
@@ -339,9 +325,6 @@ function toInt(ip) {
     return ((parts[0] << 24) | (parts[1] << 16) | (parts[2] << 8) | parts[3]) >>> 0;
 }
 
-// Only trust announces coming from an address on one of our own IPv4 subnets. This blocks
-// the spoofed loopback / link-local / metadata-endpoint peer that would turn /api/send
-// into a port scanner for the victim's own machine.
 let subnetCache = { at: 0, list: [] };
 function localSubnets() {
     if (Date.now() - subnetCache.at > 30_000)
@@ -349,6 +332,10 @@ function localSubnets() {
     return subnetCache.list;
 }
 
+/*
+  Announces are trusted only from our own IPv4 subnets. This is what stops a spoofed
+  loopback or metadata-endpoint peer turning /api/send into a port scanner.
+*/
 function onLocalSubnet(ip) {
     const value = toInt(ip);
     if (value === null) return false;
@@ -361,9 +348,11 @@ function onLocalSubnet(ip) {
     return false;
 }
 
-// The WHATWG URL parser already normalises 127.1, 2130706433, 0x7f000001 and friends
-// down to 127.0.0.1. These are the spellings it does NOT collapse, and every one of them
-// still reaches the recipient's own machine.
+/*
+  The URL parser already collapses 127.1, 2130706433 and 0x7f000001 to 127.0.0.1.
+  These are the spellings it does not collapse, and each still reaches the
+  recipient's own machine.
+*/
 function isLoopbackHost(host) {
     const bare = host
         .replace(/^\[|\]$/g, "")
@@ -384,8 +373,6 @@ function safeUrl(raw) {
     try {
         const url = new URL(String(raw));
         if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-        // A link pointing at the recipient's own loopback is a CSRF payload against
-        // whatever they happen to be running locally, not something worth sharing.
         if (isLoopbackHost(url.hostname)) return null;
         if (url.href.length > 2048) return null;
         return url.href;
@@ -393,8 +380,6 @@ function safeUrl(raw) {
         return null;
     }
 }
-
-// ---------------------------------------------------------------- discovery
 
 function broadcastAddresses() {
     const out = new Set(["255.255.255.255"]);
@@ -440,7 +425,6 @@ sock.on("message", (buf, rinfo) => {
     const port = Number(msg.port);
     if (!Number.isInteger(port) || port < 1 || port > 65535) return;
     if (!onLocalSubnet(rinfo.address)) return;
-    // With a secret set, an unsigned, stale or replayed announce is not a peer we know.
     if (SECRET) {
         if (!withinSkew(Number(msg.ts))) return;
         if (!macEquals(announceMac(msg.id, clean(msg.name || "unknown"), port, msg.ts), msg.mac))
@@ -449,10 +433,10 @@ sock.on("message", (buf, rinfo) => {
     }
 
     const existing = peers.get(msg.id);
-    // First address AND port win for the lifetime of the entry: otherwise anyone who
-    // overhears a broadcast can re-announce that id and quietly become that peer. The port
-    // matters as much as the address - a source-spoofed announce that keeps the address but
-    // moves the port redirects deliveries just as effectively.
+    /*
+      First address and port win for the life of the entry, or anyone who overhears a
+      broadcast can re-announce that id and quietly become that peer.
+    */
     if (existing && (existing.addr !== rinfo.address || existing.port !== port)) {
         if (Date.now() - existing.lastSeen < PEER_TTL_MS) {
             if (!existing.warned) {
@@ -465,9 +449,11 @@ sock.on("message", (buf, rinfo) => {
         }
     }
     if (!existing) {
-        // Rejecting at the cap turned unbounded growth into a lockout: 256 packets of random
-        // ids from one address hid every real peer. Rate limit new ids per source, and when
-        // the map is full evict the stalest entry instead of refusing the newcomer.
+        /*
+          Rejecting at the cap turned unbounded growth into a lockout: 256 packets of random
+          ids from one address hid every real peer. Rate limit new ids per source, and evict
+          the stalest entry when the map is full instead of refusing the newcomer.
+        */
         if (!announceLimit(rinfo.address)) return;
         if (peers.size >= MAX_PEERS) {
             const stalest = [...peers.values()].sort((a, b) => a.lastSeen - b.lastSeen)[0];
@@ -485,7 +471,6 @@ sock.on("message", (buf, rinfo) => {
         manual: false,
     });
 
-    // Reply straight away so a machine that just joined shows up instantly on both sides.
     if (!existing) {
         console.log(`+ ${clean(msg.name)} (${rinfo.address})`);
         if (replyLimit(rinfo.address)) sendAnnounce({ address: rinfo.address, port: args.dport });
@@ -516,7 +501,6 @@ setInterval(() => {
     }
 }, 3000);
 
-// Manual peers: for networks where UDP broadcast is blocked (some office / guest wifi).
 async function probeManualPeers() {
     if (!config.enabled) return;
     for (const spec of args.peers) {
@@ -532,7 +516,6 @@ async function probeManualPeers() {
             const who = await res.json();
             if (typeof who.id !== "string" || !/^[0-9a-f]{16}$/.test(who.id) || who.id === SELF_ID)
                 continue;
-            // A manual peer must prove it holds the secret too, or --peer would be a way in.
             if (
                 SECRET &&
                 !macEquals(
@@ -542,11 +525,12 @@ async function probeManualPeers() {
             )
                 continue;
             const existing = peers.get(who.id);
-            // A hostile --peer must not be able to take over a peer discovered over UDP.
             if (existing && !existing.manual) continue;
             if (!existing && peers.size >= MAX_PEERS) continue;
-            // Store the resolved address, not the operator's string: sender verification
-            // compares against the socket's IP, which a hostname could never match.
+            /*
+              Store the resolved address, not the operator's string: sender verification compares
+              against the socket's IP, which a hostname could never match.
+            */
             const { address } = await dns.promises.lookup(host, { family: 4 });
             peers.set(who.id, {
                 id: who.id,
@@ -565,8 +549,6 @@ if (args.peers.length) {
     probeManualPeers();
     setInterval(probeManualPeers, 5000);
 }
-
-// ---------------------------------------------------------------- http
 
 function json(res, code, body) {
     const payload = JSON.stringify(body);
@@ -591,16 +573,20 @@ function readBody(req, limit = 16 * 1024) {
             chunks.push(c);
         });
         req.on("end", () => {
-            // The raw text comes back too: /inbox has to authenticate the exact bytes it was
-            // sent, not a re-serialisation of them.
+            /*
+              The raw text comes back too: /inbox authenticates the exact bytes it was sent, not a
+              re-serialisation of them.
+            */
             const raw = chunks.length ? Buffer.concat(chunks).toString() : "";
             try {
                 const parsed = raw ? JSON.parse(raw) : {};
-                // "null", "[]" and "\"x\"" are all valid JSON. Handlers read properties off this
-                // value, and a throw inside an async request listener is an unhandled rejection,
-                // which kills the process. Anything that is not a plain object becomes {}.
                 resolve({
                     data:
+                        /*
+                          "null", "[]" and a bare string are all valid JSON. Handlers read properties off this
+                          value, and a throw inside an async listener is an unhandled rejection, which kills
+                          the process.
+                        */
                         parsed && typeof parsed === "object" && !Array.isArray(parsed)
                             ? parsed
                             : {},
@@ -614,9 +600,11 @@ function readBody(req, limit = 16 * 1024) {
     });
 }
 
-// Only another ezyshare daemon may deliver a link. A web page in the victim's browser
-// cannot set a custom header without a preflight, and this route answers no preflight,
-// so the browser blocks the request before it is sent.
+/*
+  Only another daemon may deliver a link. A page in the victim's browser cannot set a
+  custom header without a preflight, and this route answers none, so the browser
+  blocks the request before it is sent.
+*/
 function guardPeer(req, res) {
     if (req.headers.origin) {
         json(res, 403, { error: "browser requests not accepted here" });
@@ -633,9 +621,10 @@ function guardPeer(req, res) {
     return true;
 }
 
-// The extension is the only thing allowed to touch /api/*. Three gates: loopback source,
-// the one chrome-extension:// origin this daemon is paired with, and a custom header that
-// forces a CORS preflight so a web page cannot forge a call.
+/*
+  Three gates on /api: a loopback source, the one chrome-extension origin this daemon
+  is paired with, and a header that forces a preflight a web page cannot satisfy.
+*/
 function guardApi(req, res) {
     if (!["127.0.0.1", "::1"].includes(remoteIp(req))) {
         json(res, 403, { error: "loopback only" });
@@ -668,9 +657,10 @@ function guardApi(req, res) {
         json(res, 403, { error: "missing x-ezyshare header" });
         return false;
     }
-    // Pin only once the request has cleared every check. Doing it earlier let any local
-    // process burn the one-time pairing slot with a request that was then rejected,
-    // locking the real extension out until --reset-pairing.
+    /*
+      Pin only once the request has cleared every check. Doing it earlier let any local
+      process burn the one-time pairing slot with a request that was then rejected.
+    */
     if (origin && !config.extensionOrigin) {
         config.extensionOrigin = origin;
         saveConfig();
@@ -689,12 +679,9 @@ const server = http.createServer(async (req, res) => {
     const url = new URL(req.url, "http://localhost");
     const route = url.pathname;
 
-    // ---- LAN surface -------------------------------------------------
     if (route === "/whoami" && req.method === "GET") {
         if (!config.enabled) return json(res, 503, { error: "sharing is off" });
         const body = { id: SELF_ID, name: SELF_NAME, port: HTTP_PORT };
-        // The caller picks the nonce, so a reply recorded from some other exchange cannot be
-        // played back at them.
         const nonce = url.searchParams.get("nonce");
         if (SECRET && nonce) body.mac = whoamiMac(SELF_ID, SELF_NAME, HTTP_PORT, nonce);
         return json(res, 200, body);
@@ -713,7 +700,6 @@ const server = http.createServer(async (req, res) => {
         } catch {
             return json(res, 400, { error: "bad body" });
         }
-        // With a secret set, a delivery has to be signed by a daemon holding the same one.
         if (SECRET) {
             if (!withinSkew(Number(body.ts)))
                 return json(res, 401, { error: "stale or unsigned request" });
@@ -726,8 +712,6 @@ const server = http.createServer(async (req, res) => {
         if (!link)
             return json(res, 400, { error: "url must be a non-loopback http or https link" });
 
-        // The sender names itself, so believe it only when the claimed id is a peer we
-        // already know at exactly this address. Otherwise the item is labelled as unknown.
         const claimed = typeof body.fromId === "string" ? peers.get(body.fromId) : null;
         const verified = claimed && claimed.addr === ip;
 
@@ -742,7 +726,6 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true });
     }
 
-    // ---- extension surface -------------------------------------------
     if (!route.startsWith("/api/")) return json(res, 404, { error: "not found" });
     if (!guardApi(req, res)) return;
 
@@ -777,8 +760,6 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (route === "/api/peers") {
-        // `secured` lets the panel tell the user whether a shared secret is in force. It is a
-        // boolean on purpose: the secret itself never leaves the daemon.
         return json(res, 200, {
             me: { id: SELF_ID, name: SELF_NAME },
             enabled: config.enabled,
@@ -815,8 +796,10 @@ const server = http.createServer(async (req, res) => {
                 body: rawOut,
                 signal: AbortSignal.timeout(5000),
             });
-            // Deliberately vague: relaying the peer's status or the socket error would turn
-            // a click into a port scanner for whatever address that peer record points at.
+            /*
+              Deliberately vague. Relaying the peer's status or the socket error would turn one
+              click into a port scanner for whatever address that peer record points at.
+            */
             if (!r.ok) return json(res, 502, { error: `${peer.name} refused it` });
         } catch {
             return json(res, 502, { error: `could not reach ${peer.name}` });
@@ -825,7 +808,6 @@ const server = http.createServer(async (req, res) => {
         return json(res, 200, { ok: true, to: peer.name });
     }
 
-    // Long poll: returns as soon as something newer than `since` lands, or after `wait` ms.
     if (route === "/api/inbox") {
         const since = Number(url.searchParams.get("since") || 0);
         const wait = Math.min(Math.max(Number(url.searchParams.get("wait")) || 0, 0), 60000);
@@ -898,7 +880,6 @@ server.listen(HTTP_PORT, "0.0.0.0", () => {
     );
 });
 
-// No single malformed request should be able to take the daemon down.
 process.on("unhandledRejection", (err) =>
     console.error("unhandled rejection:", err?.message || err),
 );
