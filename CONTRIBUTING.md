@@ -5,12 +5,13 @@ Thanks for taking a look. Issues and pull requests are both welcome.
 ## Getting set up
 
 ```bash
-bun install     # installs dependencies and the git hooks
-bun run build   # compiles the extension into dist/extension
-bun test        # 69 tests, about two seconds
+./setup.sh --no-autostart   # install, build, skip the login item
+bun test                    # 69 tests, about two seconds
 ```
 
-Then start a daemon and load the extension as the [README](README.md#install-do-this-on-every-machine) describes.
+`--no-autostart` keeps a development machine from acquiring a login item. Start the daemon
+yourself with `./start.sh`, and load `dist/extension` into Chrome as the
+[README](README.md#install-do-this-on-every-machine) describes.
 
 Testing a change to sharing usually needs two daemons. They can both run on one machine,
 as long as they use different ports and their own state directories:
