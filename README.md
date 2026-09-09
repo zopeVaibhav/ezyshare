@@ -54,57 +54,60 @@ no build step; only the extension is compiled. `zod` is the single runtime depen
 
 ## Install (do this on every machine)
 
-Needs Node 18+ on each machine. Check with `node -v`; get it from https://nodejs.org.
-
-1. Copy this folder to the machine.
-2. Start the daemon.
-
-    macOS / Linux:
-
-    ```bash
-    ./start.sh
-    ```
-
-    Windows: double-click `start.cmd`.
-
-    No arguments needed. Other people see this machine's own name — whatever macOS
-    System Settings, or Windows, already calls it. Override it with `--name "Something Else"`
-    only if you want to.
-
-    Approve the firewall prompt the first time so other machines can reach you.
-    On Windows tick **Private networks**; on macOS click **Allow**.
-
-3. Load the extension: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the `extension/` folder.
-4. Click the ezyshare toolbar icon to open the side panel. Your friend's name shows up within a few seconds.
-
-### Keep it running after every login
-
-macOS:
+You need [bun](https://bun.sh). Check with `bun --version`.
 
 ```bash
-./install-autostart.sh
+git clone https://github.com/zopeVaibhav/ezyshare.git
+cd ezyshare
+./setup.sh
 ```
 
-Windows: double-click `install-autostart.cmd`.
+Windows: double-click `setup.cmd`.
 
-Both take an optional name argument, same as `start.sh`.
-Drops a hidden launcher in your Startup folder. Undo with `uninstall-autostart.cmd`.
+That installs dependencies, builds the extension, and sets the daemon to start at every
+login. It finishes by printing the folder to load into Chrome and copying the path to your
+clipboard.
 
-Linux (systemd user service):
+Chrome will not let a script install an extension, so one step is manual:
+
+1. Open `chrome://extensions`
+2. Turn on **Developer mode**, top right
+3. Click **Load unpacked** and pick the folder `setup.sh` printed (`dist/extension`)
+4. Click the ezyshare icon in the toolbar
+
+Allow the firewall prompt the first time — on Windows tick **Private networks** — or nobody
+can reach you.
+
+Other people see whatever your machine already calls itself. To use a different name:
 
 ```bash
-mkdir -p ~/.config/systemd/user
-cat > ~/.config/systemd/user/ezyshare.service <<EOF
-[Unit]
-Description=ezyshare daemon
-[Service]
-ExecStart=$(command -v node) $PWD/daemon/ezyshare.mjs --name "$(hostname)"
-Restart=always
-[Install]
-WantedBy=default.target
-EOF
-systemctl --user enable --now ezyshare
+./setup.sh --name="Something Else"
 ```
+
+To skip the login item and start the daemon by hand instead, pass `--no-autostart` and run
+`./start.sh` when you want it.
+
+Everyone you share with repeats these steps on their own machine. There is no server to
+set up and nothing to sign into.
+
+### Starting at login
+
+`setup.sh` does this for you. It installs a LaunchAgent on macOS or a systemd user unit on
+Linux; `setup.cmd` puts a hidden launcher in the Startup folder on Windows.
+
+To remove it:
+
+```bash
+# macOS
+launchctl unload ~/Library/LaunchAgents/com.ezyshare.daemon.plist
+rm ~/Library/LaunchAgents/com.ezyshare.daemon.plist
+
+# Linux
+systemctl --user disable --now ezyshare
+rm ~/.config/systemd/user/ezyshare.service
+```
+
+Windows: run `uninstall-autostart.cmd`.
 
 ## Turning it on and off
 
