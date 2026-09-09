@@ -28,6 +28,30 @@
             <p class="hint" id="errline"></p>
         </section>
 
+        <section id="conflict" hidden>
+            <p class="warn">Another extension is paired with this daemon.</p>
+            <p class="hint">
+                This happens when the extension is reloaded from a new folder, because Chrome gives
+                it a new id. Your daemon printed a code. Find it in the terminal running the daemon,
+                or at the end of <code class="inline">~/.ezyshare/daemon.log</code>, then enter it
+                here.
+            </p>
+            <form id="claim-form">
+                <input
+                    id="code"
+                    type="text"
+                    inputmode="numeric"
+                    pattern="[0-9]{6}"
+                    maxlength="6"
+                    autocomplete="off"
+                    placeholder="123456"
+                    aria-label="Pairing code"
+                />
+                <button type="submit" id="claim">Pair this extension</button>
+            </form>
+            <p class="hint" id="claim-error" role="alert"></p>
+        </section>
+
         <section id="paused" hidden>
             <p class="empty">
                 Sharing is off.<br />You are invisible to everyone and links are refused.<br />Flip

@@ -1,4 +1,11 @@
-import { api, errorText, sendLink } from "./shared.ts";
+import {
+    api,
+    claimPairing,
+    DaemonError,
+    errorText,
+    isPairingConflict,
+    sendLink,
+} from "./shared.ts";
 import type { InboxItem, InboxResponse, PeerCard, PeersResponse } from "./ezyshare.type.ts";
 
 function el<T extends HTMLElement>(id: string): T {
@@ -223,6 +230,27 @@ function renderLock(secured: boolean): void {
 
 let toggleBusy = false;
 
+function showOnly(section: "main" | "paused" | "offline" | "conflict"): void {
+    for (const id of ["main", "paused", "offline", "conflict"]) {
+        el(id).hidden = id !== section;
+    }
+}
+
+/*
+    A pairing conflict is not the daemon being down, and saying so sent people looking in
+    the wrong place. It gets its own panel with the one action that fixes it.
+*/
+function showConflict(): void {
+    showOnly("conflict");
+    el("lock").hidden = true;
+    const toggle = el<HTMLInputElement>("toggle");
+    toggle.checked = false;
+    toggle.disabled = true;
+    el("dot").classList.remove("on");
+    el("myname").textContent = "not paired";
+    renderedSignature = null;
+}
+
 async function tick(): Promise<void> {
     const toggle = el<HTMLInputElement>("toggle");
     try {
@@ -231,9 +259,7 @@ async function tick(): Promise<void> {
             api<InboxResponse>("/api/inbox?since=0&wait=0"),
         ]);
 
-        el("offline").hidden = true;
-        el("paused").hidden = peerData.enabled;
-        el("main").hidden = !peerData.enabled;
+        showOnly(peerData.enabled ? "main" : "paused");
         toggle.disabled = false;
         if (!toggleBusy) toggle.checked = peerData.enabled;
         el("dot").classList.toggle("on", peerData.enabled);
@@ -245,9 +271,9 @@ async function tick(): Promise<void> {
         renderPeers(peerData.peers);
         renderInbox(inboxData.items);
     } catch (err) {
-        el("offline").hidden = false;
-        el("main").hidden = true;
-        el("paused").hidden = true;
+        if (isPairingConflict(err)) return showConflict();
+
+        showOnly("offline");
         el("lock").hidden = true;
         toggle.checked = false;
         toggle.disabled = true;
@@ -257,6 +283,42 @@ async function tick(): Promise<void> {
         renderedSignature = null;
     }
 }
+
+el("claim-form").addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const input = el<HTMLInputElement>("code");
+    const button = el<HTMLButtonElement>("claim");
+    const error = el("claim-error");
+    const code = input.value.trim();
+
+    if (!/^[0-9]{6}$/.test(code)) {
+        error.textContent = "Enter the six digit code the daemon printed.";
+        return;
+    }
+
+    error.textContent = "";
+    button.disabled = true;
+    input.disabled = true;
+
+    void claimPairing(code)
+        .then(() => {
+            announce("Paired");
+            input.value = "";
+            void tick();
+        })
+        .catch((err: unknown) => {
+            error.textContent =
+                err instanceof DaemonError && err.code === "slow_down"
+                    ? "Too many attempts. Wait a minute and try again."
+                    : "That code is wrong or has expired. Restart the daemon to print a new one.";
+            announce("Pairing failed");
+        })
+        .finally(() => {
+            button.disabled = false;
+            input.disabled = false;
+        });
+});
 
 el<HTMLInputElement>("toggle").addEventListener("change", (event) => {
     const wanted = (event.target as HTMLInputElement).checked;

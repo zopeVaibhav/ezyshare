@@ -4,6 +4,7 @@ import { json } from "./http.ts";
 import { isLoopbackIp, remoteIp } from "./net.ts";
 import { clean } from "./text.ts";
 import type { ConfigStore } from "./config.store.ts";
+import type { Pairing } from "./pairing.ts";
 
 /*
     Only another daemon may deliver a link. A page in the victim's browser cannot set a
@@ -30,21 +31,32 @@ export function guardPeer(req: IncomingMessage, res: ServerResponse): boolean {
     Three gates on /api: a loopback source, the one chrome-extension origin this daemon
     is paired with, and a header that forces a preflight a web page cannot satisfy.
 */
-export function guardApi(req: IncomingMessage, res: ServerResponse, config: ConfigStore): boolean {
+export function guardApi(
+    req: IncomingMessage,
+    res: ServerResponse,
+    config: ConfigStore,
+    pairing: Pairing,
+): boolean {
     if (!isLoopbackIp(remoteIp(req))) {
-        json(res, 403, { error: "loopback only" });
+        json(res, 403, { code: "loopback_only", error: "loopback only" });
         return false;
     }
 
     const origin = req.headers.origin;
     if (origin) {
         if (!EXTENSION_ORIGIN.test(origin)) {
-            json(res, 403, { error: "bad origin" });
+            json(res, 403, { code: "bad_origin", error: "bad origin" });
             return false;
         }
         if (config.current.extensionOrigin && config.current.extensionOrigin !== origin) {
+            /*
+                Machine-readable, because the panel has to tell a pairing conflict apart
+                from a daemon that is simply not there.
+            */
+            pairing.challenge();
             json(res, 403, {
-                error: "another extension is already paired; run with --reset-pairing to change it",
+                code: "paired_elsewhere",
+                error: "another extension is already paired with this daemon",
             });
             return false;
         }
@@ -62,7 +74,7 @@ export function guardApi(req: IncomingMessage, res: ServerResponse, config: Conf
     }
 
     if (!req.headers[API_HEADER]) {
-        json(res, 403, { error: "missing x-ezyshare header" });
+        json(res, 403, { code: "missing_header", error: "missing x-ezyshare header" });
         return false;
     }
 
