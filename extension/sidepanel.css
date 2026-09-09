@@ -1,105 +1,102 @@
-:root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #16130f;
-    --muted: #6d675f;
-    --line: #e3ded6;
-    --card: #f7f4ef;
-    --accent: #2f7d4f;
-    --warn: #b4392c;
+@font-face {
+    font-family: "Plus Jakarta Sans Variable";
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: url("fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
 }
+
+@font-face {
+    font-family: "Geist Mono Variable";
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: swap;
+    src: url("fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+:root {
+    color-scheme: light;
+
+    /*
+        Two anchors, and every other value is a step between them. Ivory is a warm cream
+        and the black is all but neutral, so the warmth has to be carried deliberately
+        through the mid tones or the light theme separates into cream and grey.
+    */
+    --ivory: #f6f1ea;
+    --ink: #0b0b0c;
+
+    --background: var(--ivory);
+    --foreground: var(--ink);
+    --panel: #fbf8f3;
+    --card: #f0eae1;
+    --card-foreground: var(--ink);
+    --popover: #fdfbf8;
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--ivory);
+    --secondary: #e9e2d7;
+    --secondary-foreground: var(--ink);
+    --muted: #e9e2d7;
+    --muted-foreground: #6f6a62;
+    --accent: #ece5db;
+    --accent-foreground: var(--ink);
+    --destructive: #a8372c;
+    --success: #2c6f52;
+    --border: #ece5da;
+    --input: #ddd4c7;
+    --ring: var(--ink);
+    --radius: 0.625rem;
+
+    --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+    --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #16130f;
-        --fg: #f2eee7;
-        --muted: #9a938a;
-        --line: #2c2721;
-        --card: #201c17;
+    :root:not(.light) {
+        color-scheme: dark;
+
+        --background: var(--ink);
+        --foreground: var(--ivory);
+        --panel: #101011;
+        --card: #151517;
+        --card-foreground: var(--ivory);
+        --popover: #151517;
+        --popover-foreground: var(--ivory);
+        --primary: var(--ivory);
+        --primary-foreground: var(--ink);
+        --secondary: #232326;
+        --secondary-foreground: var(--ivory);
+        --muted: #151517;
+        --muted-foreground: #97928a;
+        --accent: #1e1e21;
+        --accent-foreground: var(--ivory);
+        --destructive: #e07a6e;
+        --success: #74c09b;
+        --border: #1b1b1e;
+        --input: #2a2a2e;
+        --ring: #97928a;
     }
 }
+
 * {
     box-sizing: border-box;
 }
+
 body {
     margin: 0;
-    padding: 12px;
-    font:
-        13px/1.5 system-ui,
-        -apple-system,
-        sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-}
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.brand {
-    font-weight: 650;
-    letter-spacing: -0.01em;
-}
-.me {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    font-size: 12px;
-    margin: 2px 0 12px;
+    padding: 0 14px 20px;
+    font: 13px/1.5 var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
 }
 
-.switch {
-    display: inline-flex;
-    cursor: pointer;
-}
-.switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.track {
-    width: 34px;
-    height: 20px;
-    border-radius: 999px;
-    background: var(--line);
-    display: block;
-    position: relative;
-    transition: background 0.15s;
-}
-.knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    transition: transform 0.15s;
-}
-.switch input:checked + .track {
-    background: var(--accent);
-}
-.switch input:checked + .track .knob {
-    transform: translateX(14px);
-}
-.switch input:focus-visible + .track {
-    outline: 2px solid var(--accent);
+:focus-visible {
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
-}
-.dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--warn);
-    flex: none;
-}
-.dot.on {
-    background: var(--accent);
+    border-radius: 6px;
 }
 
-/* Visible only to assistive tech: labels and the live region that narrates send results. */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -107,279 +104,450 @@ header {
     padding: 0;
     margin: -1px;
     overflow: hidden;
-    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
     white-space: nowrap;
-    border: 0;
 }
 
-.chip {
-    margin-left: auto;
-    flex: none;
-    padding: 1px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--card);
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    cursor: help;
+/* header ------------------------------------------------------------------ */
+
+header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 14px 0 12px;
+    background: var(--background);
 }
-.chip.locked {
-    border-color: var(--accent);
-    color: var(--accent);
+
+.identity {
+    min-width: 0;
+}
+
+.brand {
+    display: block;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+}
+
+.who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 1px;
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+}
+
+.who > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dot {
+    flex: none;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+}
+
+.dot.on {
+    background: var(--success);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: none;
+}
+
+/*
+    Refresh is a maintenance action, not something to reach for, so it reads as an icon
+    rather than a button competing with the switch beside it.
+*/
+.icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+}
+
+.icon:hover {
+    background: var(--accent);
+    color: var(--foreground);
+}
+
+.icon svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.6;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* switch ------------------------------------------------------------------ */
+
+.switch {
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.track {
+    position: relative;
+    display: block;
+    width: 32px;
+    height: 19px;
+    border-radius: 999px;
+    background: var(--secondary);
+    transition: background 0.15s;
+}
+
+.knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 15px;
+    height: 15px;
+    border-radius: 50%;
+    background: var(--popover);
+    transition:
+        transform 0.15s,
+        background 0.15s;
+}
+
+.switch input:checked + .track .knob {
+    background: var(--primary-foreground);
+}
+
+.switch input:checked + .track {
+    background: var(--primary);
+}
+
+.switch input:checked + .track .knob {
+    transform: translateX(13px);
+}
+
+.switch input:disabled + .track {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.switch input:focus-visible + .track {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* sections ---------------------------------------------------------------- */
+
+.section-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 22px 0 6px;
+}
+
+.section-head:first-child {
+    margin-top: 8px;
+}
+
+h2 {
+    margin: 0;
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--muted-foreground);
 }
 
 .count {
-    display: inline-grid;
-    place-items: center;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
+    padding: 0 5px;
     border-radius: 999px;
-    background: var(--accent);
-    color: #fff;
+    background: var(--secondary);
+    color: var(--secondary-foreground);
     font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0;
-}
-h2 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin: 18px 0 6px;
-}
-.hint,
-.empty {
-    color: var(--muted);
-    font-size: 12px;
-    margin: 0 0 10px;
-}
-.empty {
-    text-align: center;
-    padding: 14px;
-    border: 1px dashed var(--line);
-    border-radius: 8px;
-}
-.warn {
-    color: var(--warn);
     font-weight: 600;
-    margin: 0 0 4px;
-}
-code {
-    display: block;
-    background: var(--card);
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    overflow-x: auto;
-}
-ul {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
 }
 
+/*
+    Only shown when a shared secret is set. No chip is the ordinary case, so saying
+    "open" every time was noise that taught the reader to ignore the spot.
+*/
+.chip {
+    margin-left: auto;
+    font-size: 10px;
+    color: var(--success);
+}
+
+.link {
+    margin-left: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+}
+
+.link:hover {
+    color: var(--foreground);
+    text-decoration: underline;
+}
+
+.quiet {
+    margin: 2px 0 0;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+}
+
+ul {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* people ------------------------------------------------------------------ */
+
+/*
+    Rows, not cards. A stack of bordered boxes gave every person the same weight as every
+    section, and the panel read as a pile of containers.
+*/
 .peer {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--card);
+    padding: 8px;
+    border-radius: 8px;
     cursor: pointer;
-    transition:
-        border-color 0.12s,
-        transform 0.12s,
-        background 0.12s;
+    transition: background 0.12s;
 }
+
 .peer:hover {
-    border-color: var(--accent);
+    background: var(--accent);
 }
-.peer:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
-}
-.peer:active {
-    transform: scale(0.99);
-}
+
+/*
+    Softened off full primary. Ivory on near black was the highest contrast edge on the
+    panel, so the row being dragged over shouted louder than the link being dragged.
+*/
 .peer.over {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, var(--card));
-    transform: scale(1.02);
+    background: var(--accent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 45%, var(--background));
 }
-.peer.sent {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 22%, var(--card));
-}
-.peer.failed {
-    border-color: var(--warn);
-}
+
 .avatar {
-    width: 26px;
-    height: 26px;
-    border-radius: 50%;
     flex: none;
     display: grid;
     place-items: center;
-    font-size: 11px;
-    font-weight: 650;
-    background: var(--accent);
-    color: #fff;
-}
-.peer .name {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--secondary);
+    color: var(--secondary-foreground);
+    font-size: 10px;
     font-weight: 600;
 }
-.peer .sub {
-    color: var(--muted);
-    font-size: 11px;
-}
-.peer .col {
-    display: flex;
-    flex-direction: column;
+
+.peer .name {
+    flex: 1;
     min-width: 0;
-}
-.peer .col > * {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 550;
 }
 
+/*
+    Empty until a send resolves, and on the right so the row keeps one line either way.
+    A second line appearing under the name shifted every row below it mid-drag.
+*/
+.peer .status {
+    flex: none;
+    font-family: var(--font-mono);
+    font-size: 10.5px;
+    color: var(--muted-foreground);
+}
+
+.peer.sent .status {
+    color: var(--success);
+}
+
+.peer.failed .status {
+    color: var(--destructive);
+}
+
+/* received ---------------------------------------------------------------- */
+
 .item {
-    padding: 8px 10px;
-    border: 1px solid var(--line);
+    position: relative;
+    padding: 8px 8px 8px 20px;
     border-radius: 8px;
 }
-.item.unread {
-    border-left: 3px solid var(--accent);
+
+.item:hover {
+    background: var(--accent);
 }
+
+.item.unread::before {
+    content: "";
+    position: absolute;
+    left: 8px;
+    top: 14px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+
+.item.unverified::before {
+    background: var(--destructive);
+}
+
 .item a {
-    color: inherit;
-    font-weight: 600;
-    text-decoration: none;
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: inherit;
+    font-weight: 550;
+    text-decoration: none;
 }
+
 .item a:hover {
     text-decoration: underline;
 }
+
 .item .sub {
-    color: var(--muted);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
     font-size: 11px;
-}
-.item.unverified {
-    border-left: 3px solid var(--warn);
-}
-.item.unverified .sub {
-    color: var(--warn);
+    color: var(--muted-foreground);
 }
 
-button.ghost {
-    margin-top: 10px;
-    width: 100%;
-    padding: 7px;
-    background: none;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--muted);
+.item.unverified .sub {
+    color: var(--destructive);
+}
+
+/* states ------------------------------------------------------------------ */
+
+.state {
+    padding: 20px 0 0;
+}
+
+.state-title {
+    margin: 0 0 4px;
+    font-weight: 600;
+}
+
+.state-body {
+    margin: 0 0 12px;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--muted-foreground);
+}
+
+.state-note {
+    margin: 8px 0 0;
+    font-size: 11px;
+    color: var(--destructive);
+}
+
+.state-note:empty {
+    display: none;
+}
+
+code {
+    display: block;
+    padding: 8px 10px;
+    border-radius: 6px;
+    background: var(--card);
+    font-family: var(--font-mono);
+    font-size: 11px;
+    overflow-x: auto;
+}
+
+code.inline {
+    display: inline;
+    padding: 1px 4px;
+    background: var(--secondary);
+}
+
+/* controls ---------------------------------------------------------------- */
+
+#claim-form {
+    display: flex;
+    gap: 6px;
+}
+
+#code {
+    flex: 1;
+    min-width: 0;
+    padding: 8px 10px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--popover);
+    color: var(--foreground);
+    font-family: var(--font-mono);
+    font-size: 13px;
+    letter-spacing: 0.28em;
+    text-align: center;
+}
+
+#code::placeholder {
+    color: var(--muted-foreground);
+}
+
+#claim {
+    flex: none;
+    padding: 8px 14px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
     font: inherit;
     font-size: 12px;
+    font-weight: 600;
     cursor: pointer;
 }
-button.ghost:hover {
-    border-color: var(--accent);
-    color: var(--fg);
-}
-button.ghost:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-}
-footer {
-    margin-top: 4px;
+
+#claim:hover {
+    opacity: 0.9;
 }
 
-.item a:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 3px;
-}
-
-h2 {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+#claim:disabled {
+    opacity: 0.5;
+    cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {
     * {
         transition: none !important;
     }
-    .peer.over,
-    .peer:active {
-        transform: none;
-    }
-}
-
-code.inline {
-    display: inline;
-    padding: 1px 4px;
-    font-size: 11px;
-}
-
-#claim-form {
-    display: flex;
-    gap: 6px;
-    margin-bottom: 6px;
-}
-
-#code {
-    flex: 1;
-    min-width: 0;
-    padding: 7px 9px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--fg);
-    font: inherit;
-    letter-spacing: 0.18em;
-    text-align: center;
-}
-
-#code:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-    border-color: var(--accent);
-}
-
-#claim {
-    padding: 7px 12px;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
-    font: inherit;
-    font-size: 12px;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-#claim:disabled {
-    opacity: 0.55;
-    cursor: default;
-}
-
-#claim-error:empty {
-    display: none;
-}
-
-#claim-error {
-    color: var(--warn);
 }

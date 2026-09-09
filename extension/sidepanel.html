@@ -8,33 +8,45 @@
     </head>
     <body>
         <header>
-            <div class="brand">ezyshare</div>
-            <label class="switch" title="Turn sharing on or off">
-                <input type="checkbox" id="toggle" />
-                <span class="track"><span class="knob"></span></span>
-                <span class="sr-only">Sharing</span>
-            </label>
+            <div class="identity">
+                <span class="brand">ezyshare</span>
+                <span class="who"
+                    ><span id="dot" class="dot"></span><span id="myname">connecting…</span></span
+                >
+            </div>
+            <div class="actions">
+                <button
+                    type="button"
+                    id="refresh"
+                    class="icon"
+                    title="Refresh"
+                    aria-label="Refresh"
+                >
+                    <svg viewBox="0 0 16 16" aria-hidden="true">
+                        <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
+                    </svg>
+                </button>
+                <label class="switch" title="Turn sharing on or off">
+                    <input type="checkbox" id="toggle" />
+                    <span class="track"><span class="knob"></span></span>
+                    <span class="sr-only">Sharing</span>
+                </label>
+            </div>
         </header>
-        <div class="me">
-            <span id="dot" class="dot"></span>
-            <span id="myname">connecting…</span>
-            <span id="lock" class="chip" hidden></span>
-        </div>
 
-        <section id="offline" hidden>
-            <p class="warn">Daemon not running.</p>
-            <p class="hint">Start it, then hit refresh:</p>
-            <code>node daemon/ezyshare.mjs</code>
-            <p class="hint" id="errline"></p>
+        <section id="offline" class="state" hidden>
+            <p class="state-title">Daemon not running</p>
+            <p class="state-body">Start it, then refresh.</p>
+            <code>./start.sh</code>
+            <p class="state-note" id="errline"></p>
         </section>
 
-        <section id="conflict" hidden>
-            <p class="warn">Another extension is paired with this daemon.</p>
-            <p class="hint">
-                This happens when the extension is reloaded from a new folder, because Chrome gives
-                it a new id. Your daemon printed a code. Find it in the terminal running the daemon,
-                or at the end of <code class="inline">~/.ezyshare/daemon.log</code>, then enter it
-                here.
+        <section id="conflict" class="state" hidden>
+            <p class="state-title">Another extension is paired</p>
+            <p class="state-body">
+                Reloading from a new folder gives this extension a new id. Your daemon printed a
+                code — check its terminal, or the end of
+                <code class="inline">~/.ezyshare/daemon.log</code>.
             </p>
             <form id="claim-form">
                 <input
@@ -44,35 +56,38 @@
                     pattern="[0-9]{6}"
                     maxlength="6"
                     autocomplete="off"
-                    placeholder="123456"
+                    placeholder="000000"
                     aria-label="Pairing code"
                 />
-                <button type="submit" id="claim">Pair this extension</button>
+                <button type="submit" id="claim">Pair</button>
             </form>
-            <p class="hint" id="claim-error" role="alert"></p>
+            <p class="state-note" id="claim-error" role="alert"></p>
         </section>
 
-        <section id="paused" hidden>
-            <p class="empty">
-                Sharing is off.<br />You are invisible to everyone and links are refused.<br />Flip
-                the switch to come back online.
-            </p>
+        <section id="paused" class="state" hidden>
+            <p class="state-title">Sharing is off</p>
+            <p class="state-body">You are invisible to everyone and links are refused.</p>
         </section>
 
         <section id="main" hidden>
-            <p class="hint">Drag a link onto a name. Or click a card to send the current tab.</p>
+            <div class="section-head">
+                <h2>People</h2>
+                <span id="lock" class="chip" hidden></span>
+            </div>
             <ul id="peers" aria-label="People on this network"></ul>
-            <p id="nopeers" class="empty" hidden>
-                No one else online yet.<br />Same wifi, daemon running on both machines.
+            <p id="nopeers" class="quiet" hidden>
+                Nobody else yet. Everyone needs the daemon running on the same wifi.
             </p>
 
-            <h2>Received <span id="unread" class="count" hidden></span></h2>
+            <div class="section-head">
+                <h2>Received</h2>
+                <span id="unread" class="count" hidden></span>
+                <button type="button" id="clear" class="link">Clear</button>
+            </div>
             <ul id="inbox" aria-label="Received links"></ul>
-            <p id="noinbox" class="empty" hidden>Nothing yet.</p>
-            <button type="button" id="clear" class="ghost">Clear received</button>
+            <p id="noinbox" class="quiet" hidden>Nothing yet.</p>
         </section>
 
-        <footer><button type="button" id="refresh" class="ghost">Refresh</button></footer>
         <div id="live" class="sr-only" role="status" aria-live="polite"></div>
         <script type="module" src="sidepanel.js"></script>
     </body>

@@ -39,19 +39,18 @@ function announce(text: string): void {
 }
 
 function flash(card: HTMLLIElement, cls: string, text: string): void {
-    const sub = card.querySelector<HTMLElement>(".sub");
-    if (!sub) return;
+    const status = card.querySelector<HTMLElement>(".status");
+    if (!status) return;
 
-    const original = card.dataset.sub ?? sub.textContent ?? "";
     card.dataset.flashing = "1";
     card.classList.add(cls);
-    sub.textContent = text;
+    status.textContent = text;
 
     clearTimeout(Number(card.dataset.flashTimer));
     card.dataset.flashTimer = String(
         setTimeout(() => {
             card.classList.remove(cls);
-            sub.textContent = original;
+            status.textContent = "";
             delete card.dataset.flashing;
         }, 1600),
     );
@@ -114,7 +113,8 @@ function peerCard(peer: PeerCard): HTMLLIElement {
     li.dataset.id = peer.id;
     li.innerHTML = `
     <span class="avatar" aria-hidden="true"></span>
-    <span class="col"><span class="name"></span><span class="sub"></span></span>`;
+    <span class="name"></span>
+    <span class="status" aria-live="polite"></span>`;
 
     const set = (selector: string, text: string) => {
         const node = li.querySelector<HTMLElement>(selector);
@@ -122,8 +122,12 @@ function peerCard(peer: PeerCard): HTMLLIElement {
     };
     set(".avatar", initials(peer.name));
     set(".name", peer.name);
-    set(".sub", peer.addr);
-    li.dataset.sub = peer.addr;
+
+    /*
+        The address stays reachable but off the row. It is the tell that a peer is not at
+        the machine you expect, so it belongs in the tooltip rather than deleted outright.
+    */
+    li.title = `${peer.name} at ${peer.addr}`;
     li.setAttribute("aria-label", `Send current tab to ${peer.name} at ${peer.addr}`);
 
     li.addEventListener("dragenter", (event) => {
@@ -220,12 +224,10 @@ function renderInbox(items: InboxItem[]): void {
 
 function renderLock(secured: boolean): void {
     const chip = el("lock");
-    chip.hidden = false;
-    chip.classList.toggle("locked", secured);
-    chip.textContent = secured ? "locked" : "open";
-    chip.title = secured
-        ? "A shared secret is set. Only daemons with the same secret can see you or send to you."
-        : "No shared secret. Any ezyshare on this network can send you a link. Start the daemon with --secret to lock it down.";
+    chip.hidden = !secured;
+    chip.textContent = "locked";
+    chip.title =
+        "A shared secret is set. Only daemons with the same secret can see you or send to you.";
 }
 
 let toggleBusy = false;
