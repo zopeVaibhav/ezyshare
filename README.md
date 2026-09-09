@@ -192,7 +192,12 @@ What it still does not do:
 
 **No notification** — check Chrome notification permission for the extension in System Settings → Notifications → Google Chrome.
 
-**"another extension is already paired"** — you reloaded the extension and Chrome gave it a new ID. Restart the daemon once with `--reset-pairing`, or delete `extensionOrigin` from `~/.ezyshare/config.json`.
+**The panel says another extension is paired** — you reloaded the extension from a different
+folder, so Chrome gave it a new id and the daemon still trusts the old one. The panel shows a
+box for this: read the six digit code the daemon printed, in its terminal or at the end of
+`~/.ezyshare/daemon.log`, and type it in. The code lasts five minutes and works once.
+
+Restarting the daemon with `--reset-pairing` still works too, and clears the pin outright.
 
 **Everyone vanished and nothing sends** — check the switch in the top right of the side panel. Off means invisible.
 

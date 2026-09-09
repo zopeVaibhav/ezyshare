@@ -327,3 +327,59 @@ h2 {
         transform: none;
     }
 }
+
+code.inline {
+    display: inline;
+    padding: 1px 4px;
+    font-size: 11px;
+}
+
+#claim-form {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 6px;
+}
+
+#code {
+    flex: 1;
+    min-width: 0;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--fg);
+    font: inherit;
+    letter-spacing: 0.18em;
+    text-align: center;
+}
+
+#code:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    border-color: var(--accent);
+}
+
+#claim {
+    padding: 7px 12px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: var(--accent);
+    color: #fff;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+#claim:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+#claim-error:empty {
+    display: none;
+}
+
+#claim-error {
+    color: var(--warn);
+}

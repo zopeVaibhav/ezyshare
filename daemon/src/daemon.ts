@@ -2,6 +2,7 @@ import type { Server } from "node:http";
 import { createConfigStore } from "./config.store.ts";
 import { createDiscovery } from "./discovery.ts";
 import { createInboxStore } from "./inbox.store.ts";
+import { createPairing } from "./pairing.ts";
 import { createPeerStore } from "./peers.store.ts";
 import { createSigner } from "./secret.ts";
 import { createServer } from "./server.ts";
@@ -16,6 +17,7 @@ export type Daemon = {
     secured: boolean;
     server: Server;
     discovery: Discovery;
+    pairingCode: () => string;
     listen: () => Promise<void>;
     close: () => Promise<void>;
 };
@@ -43,7 +45,15 @@ export function createDaemon(args: CliArgs): Daemon {
         signer,
     });
 
-    const server = createServer({ self, config, peers, inbox, signer, discovery });
+    const pairing = createPairing((code) => {
+        console.log("");
+        console.log(`  A different extension is asking to pair with this daemon.`);
+        console.log(`  If that was you, enter this code in its side panel:  ${code}`);
+        console.log(`  It expires in five minutes.`);
+        console.log("");
+    });
+
+    const server = createServer({ self, config, peers, inbox, signer, discovery, pairing });
 
     return {
         self,
@@ -51,6 +61,7 @@ export function createDaemon(args: CliArgs): Daemon {
         secured: signer !== null,
         server,
         discovery,
+        pairingCode: () => pairing.challenge(),
 
         listen() {
             return new Promise((resolve, reject) => {

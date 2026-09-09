@@ -4,6 +4,7 @@ import { createLimiter } from "./rate-limit.ts";
 import { guardApi } from "./guards.ts";
 import { json } from "./http.ts";
 import { handleInbox } from "./routes/inbox.handler.ts";
+import { handlePairingClaim } from "./routes/pairing.handler.ts";
 import { handleWhoami } from "./routes/whoami.handler.ts";
 import {
     handleClear,
@@ -46,7 +47,14 @@ export function createServer(deps: ApiDeps): Server {
         }
 
         if (!path.startsWith("/api/")) return json(res, 404, { error: "not found" });
-        if (!guardApi(req, res, deps.config)) return;
+        /*
+            The claim route is the one /api path a locked-out extension may reach, and it
+            still has to prove it knows a code only the daemon printed.
+        */
+        if (path === "/api/pairing/claim" && req.method === "POST") {
+            return handlePairingClaim(req, res, deps);
+        }
+        if (!guardApi(req, res, deps.config, deps.pairing)) return;
 
         if (path === "/api/me") return handleMe(res, deps);
         if (path === "/api/peers") return handlePeers(res, deps);

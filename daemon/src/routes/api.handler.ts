@@ -7,6 +7,7 @@ import type { ConfigStore } from "../config.store.ts";
 import type { Discovery } from "../discovery.ts";
 import type { Identity } from "../ezyshare.type.ts";
 import type { InboxStore } from "../inbox.store.ts";
+import type { Pairing } from "../pairing.ts";
 import type { PeerStore } from "../peers.store.ts";
 import type { Signer } from "../secret.ts";
 
@@ -17,6 +18,7 @@ export type ApiDeps = {
     inbox: InboxStore;
     signer: Signer | null;
     discovery: Discovery;
+    pairing: Pairing;
 };
 
 export function handleMe(res: ServerResponse, deps: ApiDeps): void {

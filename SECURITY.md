@@ -37,6 +37,9 @@ visit from injecting a link or reading your inbox.
   source address. Anything else is shown as unverified.
 - With `--secret` set, announces and deliveries are HMAC-signed with a timestamp and a
   single-use nonce.
+- Handing the pairing to a different extension needs a six digit code the daemon prints to
+  its own output, valid once for five minutes and rate limited, so a second extension
+  cannot take the pin on its own.
 - State files are `0600` inside a `0700` directory, and the log records hostnames rather
   than full URLs.
 
