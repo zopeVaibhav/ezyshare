@@ -27,25 +27,28 @@ Needs Node 18+ on each machine. Check with `node -v`; get it from https://nodejs
 1. Copy this folder to the machine.
 2. Start the daemon.
 
-   macOS / Linux:
-   ```bash
-   ./start.sh
-   ```
+    macOS / Linux:
 
-   Windows: double-click `start.cmd`.
+    ```bash
+    ./start.sh
+    ```
 
-   No arguments needed. Other people see this machine's own name — whatever macOS
-   System Settings, or Windows, already calls it. Override it with `--name "Something Else"`
-   only if you want to.
+    Windows: double-click `start.cmd`.
 
-   Approve the firewall prompt the first time so other machines can reach you.
-   On Windows tick **Private networks**; on macOS click **Allow**.
+    No arguments needed. Other people see this machine's own name — whatever macOS
+    System Settings, or Windows, already calls it. Override it with `--name "Something Else"`
+    only if you want to.
+
+    Approve the firewall prompt the first time so other machines can reach you.
+    On Windows tick **Private networks**; on macOS click **Allow**.
+
 3. Load the extension: open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked**, pick the `extension/` folder.
 4. Click the ezyshare toolbar icon to open the side panel. Your friend's name shows up within a few seconds.
 
 ### Keep it running after every login
 
 macOS:
+
 ```bash
 ./install-autostart.sh
 ```
@@ -56,6 +59,7 @@ Both take an optional name argument, same as `start.sh`.
 Drops a hidden launcher in your Startup folder. Undo with `uninstall-autostart.cmd`.
 
 Linux (systemd user service):
+
 ```bash
 mkdir -p ~/.config/systemd/user
 cat > ~/.config/systemd/user/ezyshare.service <<EOF
@@ -74,9 +78,9 @@ systemctl --user enable --now ezyshare
 
 The daemon runs all the time; the switch in the top right of the side panel controls whether you are actually sharing.
 
-| Switch | What happens |
-| --- | --- |
-| **on** | you broadcast your name, peers see you, `/inbox` accepts links |
+| Switch  | What happens                                                                                                                                  |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **on**  | you broadcast your name, peers see you, `/inbox` accepts links                                                                                |
 | **off** | broadcasting stops, your peer list empties, `/inbox` and `/whoami` return 503, and you disappear from everyone else's panel within 12 seconds |
 
 The setting is written to `~/.ezyshare/config.json`, so it survives restarts. You never need the terminal for this.
@@ -87,7 +91,7 @@ Three ways, all equivalent:
 
 - **Drag** a link from any page onto a name card in the side panel.
 - **Click** a name card to send the tab you are currently on.
-- **Right-click** a link or page, then *ezyshare to… → name*.
+- **Right-click** a link or page, then _ezyshare to… → name_.
 
 The card flashes green on success, red with the reason on failure.
 
@@ -115,11 +119,11 @@ A notification says who sent it and what it is. Click it and the link opens in a
 
 The daemon exposes two surfaces on port 8787, guarded differently:
 
-| Route | Who can reach it | Gate |
-| --- | --- | --- |
-| `/api/*` | the extension | loopback source, **one pinned `chrome-extension://` origin**, and an `X-Ezyshare` header that forces a CORS preflight |
-| `/inbox` | other ezyshare daemons on the LAN | `X-Ezyshare-Peer` header, `application/json` content type, **no `Origin` header**, rate limited |
-| `/whoami` | anyone on the LAN | none, returns display name only |
+| Route     | Who can reach it                  | Gate                                                                                                                  |
+| --------- | --------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `/api/*`  | the extension                     | loopback source, **one pinned `chrome-extension://` origin**, and an `X-Ezyshare` header that forces a CORS preflight |
+| `/inbox`  | other ezyshare daemons on the LAN | `X-Ezyshare-Peer` header, `application/json` content type, **no `Origin` header**, rate limited                       |
+| `/whoami` | anyone on the LAN                 | none, returns display name only                                                                                       |
 
 What that buys you:
 
@@ -156,6 +160,17 @@ What it still does not do:
 **"another extension is already paired"** — you reloaded the extension and Chrome gave it a new ID. Restart the daemon once with `--reset-pairing`, or delete `extensionOrigin` from `~/.ezyshare/config.json`.
 
 **Everyone vanished and nothing sends** — check the switch in the top right of the side panel. Off means invisible.
+
+## Development
+
+```bash
+bun install     # also installs the git hooks
+bun run check   # format check, lint, parse
+bun run format  # rewrite to the house style
+```
+
+`pre-commit` runs prettier and eslint over staged files. `pre-push` runs the full check.
+Formatting is 4-space, double quotes, 100 columns, matching the other repos.
 
 ## Known limits
 

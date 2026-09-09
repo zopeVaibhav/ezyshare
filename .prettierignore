@@ -1,0 +1,9 @@
+node_modules
+coverage
+*.log
+bun.lock
+bun.lockb
+package-lock.json
+.env
+.env.*
+extension/icons

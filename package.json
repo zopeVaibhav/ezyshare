@@ -1,0 +1,38 @@
+{
+    "name": "ezyshare",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "Drop a link on a friend's name and it opens on their machine.",
+    "scripts": {
+        "start": "node daemon/ezyshare.mjs",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
+        "format:check": "prettier --check \"**/*.{js,mjs,json,md,css,html}\"",
+        "check-syntax": "node --check daemon/ezyshare.mjs && for f in extension/*.js; do node --input-type=module --check < \"$f\" || exit 1; done",
+        "check": "bun run format:check && bun run lint && bun run check-syntax",
+        "prepare": "husky"
+    },
+    "lint-staged": {
+        "*.{js,mjs}": [
+            "prettier --write",
+            "eslint --fix"
+        ],
+        "*.{json,md,css,html}": [
+            "prettier --write"
+        ]
+    },
+    "engines": {
+        "node": ">=18"
+    },
+    "devDependencies": {
+        "@eslint/js": "^10.0.1",
+        "eslint": "^10.10.0",
+        "eslint-config-prettier": "^10.1.8",
+        "globals": "^17.12.0",
+        "husky": "^9.1.7",
+        "lint-staged": "^17.5.0",
+        "prettier": "^3.9.6"
+    }
+}
