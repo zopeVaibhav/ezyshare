@@ -5,6 +5,7 @@ import {
     OTHER_ORIGIN,
     readConfig,
     startDaemon,
+    waitForConfig,
 } from "./helpers/daemon.harness.ts";
 import type { Harness } from "./helpers/daemon.harness.ts";
 
@@ -56,9 +57,15 @@ describe("/api gates", () => {
         expect(rejected.status).toBe(403);
         expect(readConfig(harness.dir).extensionOrigin).toBeUndefined();
 
-        const accepted = await harness.api("/api/peers", { headers: { Origin: EXTENSION_ORIGIN } });
-        expect(accepted.status).toBe(200);
-        expect(readConfig(harness.dir).extensionOrigin).toBe(EXTENSION_ORIGIN);
+        /* Still unpaired, so a different extension is free to claim the slot. */
+        const other = await harness.api("/api/peers", { headers: { Origin: OTHER_ORIGIN } });
+        expect(other.status).toBe(200);
+
+        const config = await waitForConfig(
+            harness.dir,
+            (saved) => saved.extensionOrigin !== undefined,
+        );
+        expect(config.extensionOrigin).toBe(OTHER_ORIGIN);
     });
 
     test("a second extension is refused once one is paired", async () => {

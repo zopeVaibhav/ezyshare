@@ -80,6 +80,24 @@ export function writeInbox(dir: string, contents: unknown): void {
     fs.writeFileSync(path.join(dir, "inbox.json"), JSON.stringify(contents));
 }
 
+/*
+    Config is written with an async fs.writeFile, so a test that reads the file straight
+    after the request that triggered it is racing the disk.
+*/
+export async function waitForConfig(
+    dir: string,
+    predicate: (config: Record<string, unknown>) => boolean,
+    timeoutMs = 2000,
+): Promise<Record<string, unknown>> {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+        const config = readConfig(dir);
+        if (predicate(config)) return config;
+        if (Date.now() > deadline) return config;
+        await Bun.sleep(20);
+    }
+}
+
 export function readConfig(dir: string): Record<string, unknown> {
     try {
         return JSON.parse(fs.readFileSync(path.join(dir, "config.json"), "utf8")) as Record<
