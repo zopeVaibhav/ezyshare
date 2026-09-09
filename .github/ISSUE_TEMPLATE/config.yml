@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/zopeVaibhav/ezyshare/security/advisories/new
+    about: Report privately. ezyshare accepts input from the network, so please do not post it publicly.

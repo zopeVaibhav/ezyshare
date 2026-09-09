@@ -1,0 +1,55 @@
+name: Bug report
+description: Something does not work the way the README says it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Found a security problem instead? Please read SECURITY.md and open an advisory
+        rather than a public issue.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: banner
+    attributes:
+      label: Daemon startup banner
+      description: The lines the daemon prints when it starts, from both machines if the problem involves sharing.
+      render: text
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Runtime
+      description: Output of `bun --version`, or `node -v` if you run it on Node.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Ruled out
+      options:
+        - label: Both machines are on the same network and both daemons are running
+        - label: The firewall prompt was allowed on both machines
+        - label: The switch in the side panel is on

@@ -1,10 +1,41 @@
+<div align="center">
+
 # ezyshare
 
-Drop a link on a friend's name in the Chrome side panel. It pops up on their machine and opens in their browser. Same wifi, no cloud, no account, no WhatsApp copy-paste.
+**Drop a link on a friend's name. It opens on their machine.**
+
+Same wifi, no cloud, no account, no pasting links into a chat app just to get them onto
+someone else's screen.
+
+[![ci](https://github.com/zopeVaibhav/ezyshare/actions/workflows/ci.yml/badge.svg)](https://github.com/zopeVaibhav/ezyshare/actions/workflows/ci.yml)
+[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![runtime: bun](https://img.shields.io/badge/runtime-bun-black.svg)](https://bun.sh)
+
+</div>
+
+---
+
+You and the people next to you are on the same network. Sharing a link between you should
+not involve a server in another country, an account, or a chat thread you then have to
+scroll back through.
+
+ezyshare puts everyone on your wifi in a side panel. Drag a link onto a name and it lands
+on their machine as a notification. One click opens it.
+
+- **Nothing leaves the network.** The link goes straight from your machine to theirs.
+- **No account, no server, no config.** Start it and your name appears on their list.
+- **Three ways to send.** Drag a link onto a name, click a name to send the current tab,
+  or right-click anything and pick a name.
+- **Nothing is lost.** Links are stored locally, so they survive a restart and a missed
+  notification.
+- **Lockable.** Set a shared secret and only machines that hold it can see you or reach
+  you.
+
+Chrome or Chromium, on macOS, Windows and Linux.
 
 ## How it works
 
-Chrome extensions cannot see the local network on their own, so each machine runs a tiny Node daemon:
+A Chrome extension cannot see the local network on its own, so each machine runs a small daemon beside the browser:
 
 ```
 your Chrome  --(localhost HTTP)-->  your daemon  --(LAN HTTP)-->  friend's daemon  --> friend's Chrome
@@ -188,6 +219,14 @@ via native type stripping. `tsc --noEmit` is what actually checks the types.
 - Traffic is plain HTTP on the LAN.
 - Chrome / Chromium only. Daemon runs on macOS, Windows and Linux.
 
+## Contributing
+
+Issues and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers the
+layout, how to run the tests, and what the checks expect.
+
+Found a security problem? Please read [SECURITY.md](SECURITY.md) first — it explains the
+threat model and what is deliberately out of scope.
+
 ## Licence
 
-MIT. See [LICENSE](LICENSE). Security policy in [SECURITY.md](SECURITY.md).
+[MIT](LICENSE).
