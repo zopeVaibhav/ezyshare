@@ -6,22 +6,20 @@ const MENU_ROOT = "ezyshare-root";
 const MAX_TRACKED_LINKS = 50;
 const BATCH_NOTIFY_LIMIT = 3;
 
-// ---------------------------------------------------------------- inbox
-
 let pumping = false;
 
 async function pump() {
     if (pumping) return;
     pumping = true;
     try {
-        // Long poll forever. Chrome eventually kills the worker; the alarm below revives it.
         for (;;) {
             const { seq = 0 } = await chrome.storage.local.get("seq");
             const data = await api(`/api/inbox?since=${seq}&wait=25000`);
 
-            // The daemon's counter only ever climbs. A lower one means its state was reset
-            // (reinstall, deleted inbox.json, different --dir). Without this the extension
-            // would sit at the old high-water mark and silently never deliver again.
+            /*
+              The daemon's counter only climbs. A lower one means its state was reset, and without
+              this the extension would sit at the old high-water mark and silently stop delivering.
+            */
             if (data.seq < seq) {
                 await chrome.storage.local.set({ seq: 0 });
                 continue;
@@ -43,7 +41,9 @@ async function pump() {
 
 async function deliver(newItems) {
     if (!newItems.length) return;
-    // A flood from one machine must not become a wall of sticky notifications.
+    /*
+      A flood from one machine must not become a wall of notifications.
+    */
     if (newItems.length > BATCH_NOTIFY_LIMIT) {
         const senders = [...new Set(newItems.map((it) => it.fromName))];
         chrome.notifications.create(`${NOTIF_PREFIX}batch:${Date.now()}`, {
@@ -56,8 +56,6 @@ async function deliver(newItems) {
         return;
     }
     for (const item of newItems) {
-        // One bad item must never break the loop: the seq is already stored, so a throw
-        // here would mark these items consumed and stop delivery for good.
         try {
             await notify(item);
         } catch {
@@ -98,8 +96,10 @@ async function notify(item) {
 }
 
 async function openFromNotification(notificationId) {
-    // Three id shapes reach this handler. Only per-item ones carry a link: a "N links
-    // received" summary and a send-status toast must not slice a bogus id and post it.
+    /*
+      Three id shapes reach this handler and only per-item ones carry a link. A batch
+      summary or a send-status toast must not slice a bogus id and post it back.
+    */
     if (!notificationId.startsWith(NOTIF_PREFIX)) {
         chrome.notifications.clear(notificationId);
         return;
@@ -145,10 +145,10 @@ async function refreshBadge() {
     }
 }
 
-// ---------------------------------------------------------------- right-click menu
-
-// null, not '': after a worker restart the menus may already exist in Chrome even
-// though this variable is fresh, so the first refresh must always rebuild.
+/*
+  null, not empty string: after a worker restart the menus may already exist in Chrome
+  even though this variable is fresh, so the first refresh must always rebuild.
+*/
 let menuSignature = null;
 
 async function refreshMenus() {
@@ -210,13 +210,9 @@ function toast(title, message) {
     });
 }
 
-// ---------------------------------------------------------------- lifecycle
-
 async function boot() {
     chrome.alarms.create(ALARM, { periodInMinutes: 0.5 });
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {});
-    // First run: start from the daemon's current position so a backlog of old
-    // links does not arrive as a wall of notifications.
     const stored = await chrome.storage.local.get("seq");
     if (stored.seq === undefined) {
         try {

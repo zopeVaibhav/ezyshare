@@ -21,7 +21,6 @@ function ago(ts) {
     return `${Math.round(s / 86400)}d ago`;
 }
 
-// Screen readers get told what happened; the card colour alone does not reach them.
 function announce(text) {
     el("live").textContent = text;
 }
@@ -84,8 +83,6 @@ async function sendCurrentTab(card, peer) {
 function peerCard(peer) {
     const li = document.createElement("li");
     li.className = "peer";
-    // A card is an activatable control, so it has to be reachable and operable from the
-    // keyboard, not only by mouse and drag.
     li.tabIndex = 0;
     li.setAttribute("role", "button");
     li.dataset.id = peer.id;
@@ -124,8 +121,10 @@ function peerCard(peer) {
     return li;
 }
 
-// Rebuilding every card on each poll would throw away the "sent" flash mid-animation and
-// drop the drag state under the cursor, so only rebuild when the list actually changes.
+/*
+  Rebuilding every card on each poll would throw away the sent flash mid-animation and
+  drop the drag state under the cursor, so only rebuild when the list actually changes.
+*/
 function peerSignature(list) {
     return list.map((p) => `${p.id}:${p.name}:${p.addr}:${p.port}`).join("|");
 }
@@ -179,8 +178,6 @@ function renderInbox(items) {
     badge.setAttribute("aria-label", `${unread} unread`);
 }
 
-// Whether a shared secret is in force is the difference between "anyone here can reach me"
-// and "only my machines can", so it belongs on screen rather than only in the daemon log.
 function renderLock(secured) {
     const chip = el("lock");
     chip.hidden = false;
@@ -251,7 +248,6 @@ el("clear").addEventListener("click", async () => {
     tick();
 });
 
-// The whole panel accepts a drop too, so a sloppy aim still lands somewhere useful.
 document.addEventListener("dragover", (e) => e.preventDefault());
 document.addEventListener("drop", (e) => e.preventDefault());
 
