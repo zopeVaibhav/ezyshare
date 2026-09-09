@@ -124,7 +124,7 @@ function renderInbox(items) {
   const recent = [...items].reverse().slice(0, 25);
   el('inbox').replaceChildren(...recent.map((it) => {
     const li = document.createElement('li');
-    const unverified = it.verified === false;
+    const unverified = it.verified !== true;
     li.className = `item${it.read ? '' : ' unread'}${unverified ? ' unverified' : ''}`;
     const a = document.createElement('a');
     a.href = it.url;

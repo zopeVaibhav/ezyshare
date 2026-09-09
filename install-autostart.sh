@@ -21,6 +21,7 @@ if [ -n "$NAME" ]; then
 fi
 
 mkdir -p "$HOME/Library/LaunchAgents" "$HOME/.ezyshare"
+chmod 700 "$HOME/.ezyshare"
 cat > "$PLIST" <<PLISTEOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
