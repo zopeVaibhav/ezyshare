@@ -2,7 +2,11 @@
 # Install a macOS LaunchAgent so the ezyshare daemon starts at login and stays up.
 set -euo pipefail
 DIR="$(cd "$(dirname "$0")" && pwd)"
-NODE="$(command -v node)"
+RUNTIME="$(command -v bun || command -v node || true)"
+if [ -z "$RUNTIME" ]; then
+  echo "Neither bun nor node found. Install bun from https://bun.sh" >&2
+  exit 1
+fi
 LABEL="com.ezyshare.daemon"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 # No argument is the normal case: the daemon uses this Mac's own name.
@@ -30,8 +34,8 @@ cat > "$PLIST" <<PLISTEOF
   <key>Label</key><string>$LABEL</string>
   <key>ProgramArguments</key>
   <array>
-    <string>$NODE</string>
-    <string>$DIR/daemon/ezyshare.mjs</string>$NAME_ARGS
+    <string>$RUNTIME</string>
+    <string>$DIR/daemon/ezyshare.ts</string>$NAME_ARGS
   </array>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

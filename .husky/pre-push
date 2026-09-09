@@ -12,7 +12,10 @@ bun run format:check || { echo "${RED}Formatting failed. Run: bun run format${RE
 echo "${CYAN}Running linter...${RESET}"
 bun run lint || { echo "${RED}Linting failed${RESET}"; exit 1; }
 
-echo "${CYAN}Parsing daemon and extension...${RESET}"
-bun run check-syntax || { echo "${RED}Syntax check failed${RESET}"; exit 1; }
+echo "${CYAN}Checking types...${RESET}"
+bun run typecheck || { echo "${RED}Type checking failed${RESET}"; exit 1; }
+
+echo "${CYAN}Running tests...${RESET}"
+bun test || { echo "${RED}Tests failed${RESET}"; exit 1; }
 
 echo "${GREEN}All pre-push checks passed${RESET}"

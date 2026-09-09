@@ -5,17 +5,19 @@
     "type": "module",
     "description": "Drop a link on a friend's name and it opens on their machine.",
     "scripts": {
-        "start": "node daemon/ezyshare.mjs",
+        "start": "bun daemon/ezyshare.ts",
+        "build": "bun scripts/build-extension.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write \"**/*.{js,mjs,json,md,css,html}\"",
-        "format:check": "prettier --check \"**/*.{js,mjs,json,md,css,html}\"",
-        "check-syntax": "node --check daemon/ezyshare.mjs && for f in extension/*.js; do node --input-type=module --check < \"$f\" || exit 1; done",
-        "check": "bun run format:check && bun run lint && bun run check-syntax",
+        "format": "prettier --write \"**/*.{ts,js,mjs,json,md,css,html}\"",
+        "format:check": "prettier --check \"**/*.{ts,js,mjs,json,md,css,html}\"",
+        "typecheck": "tsc --noEmit && tsc -p extension/tsconfig.json --noEmit",
+        "test": "bun test",
+        "check": "bun run format:check && bun run lint && bun run typecheck && bun run test",
         "prepare": "husky"
     },
     "lint-staged": {
-        "*.{js,mjs}": [
+        "*.{ts,js,mjs}": [
             "prettier --write",
             "eslint --fix"
         ],
@@ -24,15 +26,24 @@
         ]
     },
     "engines": {
-        "node": ">=18"
+        "bun": ">=1.1.0",
+        "node": ">=22.6.0"
     },
     "devDependencies": {
         "@eslint/js": "^10.0.1",
+        "@types/chrome": "^0.2.9",
+        "@types/node": "^26.5.0",
         "eslint": "^10.10.0",
         "eslint-config-prettier": "^10.1.8",
         "globals": "^17.12.0",
         "husky": "^9.1.7",
         "lint-staged": "^17.5.0",
-        "prettier": "^3.9.6"
-    }
+        "prettier": "^3.9.6",
+        "typescript": "^5.9.0",
+        "typescript-eslint": "^8.70.0"
+    },
+    "dependencies": {
+        "zod": "^4.5.4"
+    },
+    "license": "MIT"
 }

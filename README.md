@@ -18,7 +18,8 @@ your Chrome  --(localhost HTTP)-->  your daemon  --(LAN HTTP)-->  friend's daemo
 - **Notification**: the extension long-polls its own daemon, so a delivered link raises a Chrome notification within a second. Clicking it opens the tab.
 - **Persistence**: the inbox is stored in `~/.ezyshare/inbox.json`, so links survive a browser or daemon restart.
 
-Zero npm dependencies. Node 18+ is the only requirement.
+Written in TypeScript. The daemon runs straight from source on bun (or Node 22.6+), with
+no build step; only the extension is compiled. `zod` is the single runtime dependency.
 
 ## Install (do this on every machine)
 
@@ -164,13 +165,21 @@ What it still does not do:
 ## Development
 
 ```bash
-bun install     # also installs the git hooks
-bun run check   # format check, lint, parse
-bun run format  # rewrite to the house style
+bun install       # also installs the git hooks
+bun run check     # format, lint, types, tests
+bun test          # tests on their own
+bun run build     # compile the extension into dist/extension
+bun run format    # rewrite to the project style
 ```
 
+Layout: `daemon/ezyshare.ts` is the entry point, `daemon/src/` holds the modules, and
+`extension/src/` is the browser side. Tests live in `tests/` and run on `bun test`.
+
 `pre-commit` runs prettier and eslint over staged files. `pre-push` runs the full check.
-Formatting is 4-space, double quotes, 100 columns, matching the other repos.
+Formatting is 4-space, double quotes, 100 columns.
+
+The daemon has no build step: bun runs the TypeScript directly, and Node 22.6+ does too
+via native type stripping. `tsc --noEmit` is what actually checks the types.
 
 ## Known limits
 
@@ -178,3 +187,7 @@ Formatting is 4-space, double quotes, 100 columns, matching the other repos.
 - No pairing secret yet: any ezyshare daemon on the LAN can send to you, though unknown senders are flagged.
 - Traffic is plain HTTP on the LAN.
 - Chrome / Chromium only. Daemon runs on macOS, Windows and Linux.
+
+## Licence
+
+MIT. See [LICENSE](LICENSE). Security policy in [SECURITY.md](SECURITY.md).
