@@ -4,9 +4,10 @@ REM Run with no arguments: the daemon uses this PC's own name.
 setlocal EnableDelayedExpansion
 cd /d "%~dp0"
 
-where node >nul 2>nul || (echo Node.js not found. Install it from https://nodejs.org & pause & exit /b 1)
-for /f "delims=" %%N in ('where node') do set "NODE=%%N" & goto :gotnode
-:gotnode
+where bun >nul 2>nul || where node >nul 2>nul || (echo Neither bun nor node found. Install bun from https://bun.sh & pause & exit /b 1)
+for /f "delims=" %%N in ('where bun 2^>nul') do set "RUNTIME=%%N" & goto :gotruntime
+for /f "delims=" %%N in ('where node') do set "RUNTIME=%%N" & goto :gotruntime
+:gotruntime
 
 set "STARTUP=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup"
 set "VBS=%STARTUP%\ezyshare.vbs"
@@ -34,7 +35,7 @@ REM cannot turn it into extra arguments or extra commands.
 >>"%VBS%" echo re.Pattern = "^[A-Za-z0-9 ._-]{1,64}$"
 >>"%VBS%" echo dir = "%~dp0"
 >>"%VBS%" echo cfg = "%CFG%"
->>"%VBS%" echo cmd = """%NODE%"" """ ^& dir ^& "daemon\ezyshare.mjs"""
+>>"%VBS%" echo cmd = """%RUNTIME%"" """ ^& dir ^& "daemon\ezyshare.ts"""
 >>"%VBS%" echo If fso.FileExists(cfg) Then
 >>"%VBS%" echo   n = Trim(fso.OpenTextFile(cfg, 1).ReadLine)
 >>"%VBS%" echo   If re.Test(n) Then cmd = cmd ^& " --name """ ^& n ^& """"
