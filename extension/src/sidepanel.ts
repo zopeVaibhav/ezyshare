@@ -1,3 +1,4 @@
+import { avatarFor } from "./avatar.ts";
 import {
     api,
     claimPairing,
@@ -14,17 +15,6 @@ function el<T extends HTMLElement>(id: string): T {
     return node as T;
 }
 
-function initials(name: string): string {
-    return (
-        name
-            .split(/[\s\-_.]+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((word) => word.charAt(0).toUpperCase())
-            .join("") || "?"
-    );
-}
-
 function ago(ts: number): string {
     const seconds = Math.round((Date.now() - ts) / 1000);
     if (seconds < 60) return "just now";
@@ -39,19 +29,18 @@ function announce(text: string): void {
 }
 
 function flash(card: HTMLLIElement, cls: string, text: string): void {
-    const sub = card.querySelector<HTMLElement>(".sub");
-    if (!sub) return;
+    const status = card.querySelector<HTMLElement>(".status");
+    if (!status) return;
 
-    const original = card.dataset.sub ?? sub.textContent ?? "";
     card.dataset.flashing = "1";
     card.classList.add(cls);
-    sub.textContent = text;
+    status.textContent = text;
 
     clearTimeout(Number(card.dataset.flashTimer));
     card.dataset.flashTimer = String(
         setTimeout(() => {
             card.classList.remove(cls);
-            sub.textContent = original;
+            status.textContent = "";
             delete card.dataset.flashing;
         }, 1600),
     );
@@ -113,17 +102,21 @@ function peerCard(peer: PeerCard): HTMLLIElement {
     li.setAttribute("role", "button");
     li.dataset.id = peer.id;
     li.innerHTML = `
-    <span class="avatar" aria-hidden="true"></span>
-    <span class="col"><span class="name"></span><span class="sub"></span></span>`;
+    <img class="avatar" alt="" width="26" height="26" />
+    <span class="name"></span>
+    <span class="status" aria-live="polite"></span>`;
 
-    const set = (selector: string, text: string) => {
-        const node = li.querySelector<HTMLElement>(selector);
-        if (node) node.textContent = text;
-    };
-    set(".avatar", initials(peer.name));
-    set(".name", peer.name);
-    set(".sub", peer.addr);
-    li.dataset.sub = peer.addr;
+    const avatar = li.querySelector<HTMLImageElement>(".avatar");
+    if (avatar) avatar.src = avatarFor(peer.id);
+
+    const name = li.querySelector<HTMLElement>(".name");
+    if (name) name.textContent = peer.name;
+
+    /*
+        The address stays reachable but off the row. It is the tell that a peer is not at
+        the machine you expect, so it belongs in the tooltip rather than deleted outright.
+    */
+    li.title = `${peer.name} at ${peer.addr}`;
     li.setAttribute("aria-label", `Send current tab to ${peer.name} at ${peer.addr}`);
 
     li.addEventListener("dragenter", (event) => {
@@ -175,6 +168,10 @@ function renderPeers(list: PeerCard[]): void {
         el("peers").replaceChildren(...list.map(peerCard));
     }
     el("nopeers").hidden = list.length > 0;
+
+    const tally = el("peercount");
+    tally.hidden = list.length === 0;
+    tally.textContent = String(list.length);
 }
 
 function inboxRow(item: InboxItem): HTMLLIElement {
@@ -199,8 +196,8 @@ function inboxRow(item: InboxItem): HTMLLIElement {
     const sub = document.createElement("span");
     sub.className = "sub";
     sub.textContent = unverified
-        ? `${item.fromName} · not a known peer · ${ago(item.ts)}`
-        : `${item.fromName} · ${ago(item.ts)}`;
+        ? `Unverified sender, ${ago(item.ts)}`
+        : `${item.fromName}, ${ago(item.ts)}`;
 
     li.append(link, sub);
     return li;
@@ -211,21 +208,21 @@ function renderInbox(items: InboxItem[]): void {
     el("inbox").replaceChildren(...recent.map(inboxRow));
     el("noinbox").hidden = recent.length > 0;
 
+    el("clear").hidden = recent.length === 0;
+
     const unread = recent.filter((item) => !item.read).length;
     const badge = el("unread");
     badge.hidden = unread === 0;
-    badge.textContent = String(unread);
+    badge.textContent = `${unread} new`;
     badge.setAttribute("aria-label", `${unread} unread`);
 }
 
 function renderLock(secured: boolean): void {
     const chip = el("lock");
-    chip.hidden = false;
-    chip.classList.toggle("locked", secured);
-    chip.textContent = secured ? "locked" : "open";
-    chip.title = secured
-        ? "A shared secret is set. Only daemons with the same secret can see you or send to you."
-        : "No shared secret. Any ezyshare on this network can send you a link. Start the daemon with --secret to lock it down.";
+    chip.hidden = !secured;
+    chip.textContent = "locked";
+    chip.title =
+        "A shared secret is set. Only daemons with the same secret can see you or send to you.";
 }
 
 let toggleBusy = false;
@@ -266,6 +263,7 @@ async function tick(): Promise<void> {
         el("myname").textContent = peerData.enabled
             ? peerData.me.name
             : `${peerData.me.name} · hidden`;
+        el("myname").title = peerData.me.name;
 
         renderLock(peerData.secured);
         renderPeers(peerData.peers);

@@ -1,105 +1,100 @@
-:root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #16130f;
-    --muted: #6d675f;
-    --line: #e3ded6;
-    --card: #f7f4ef;
-    --accent: #2f7d4f;
-    --warn: #b4392c;
+@font-face {
+    font-family: "Plus Jakarta Sans Variable";
+    font-style: normal;
+    font-weight: 200 800;
+    font-display: swap;
+    src: url("fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
 }
+
+:root {
+    color-scheme: light;
+
+    /*
+        Two anchors, and every other value is a step between them. Ivory is a warm cream
+        and the black is all but neutral, so the warmth has to be carried deliberately
+        through the mid tones or the light theme separates into cream and grey.
+    */
+    --ivory: #f6f1ea;
+    --ink: #0b0b0c;
+
+    --background: var(--ivory);
+    --foreground: var(--ink);
+    --panel: #fbf8f3;
+    --card: #f0eae1;
+    --card-foreground: var(--ink);
+    --popover: #fdfbf8;
+    --popover-foreground: var(--ink);
+    --primary: var(--ink);
+    --primary-foreground: var(--ivory);
+    --secondary: #e9e2d7;
+    --secondary-foreground: var(--ink);
+    --muted: #e9e2d7;
+    --muted-foreground: #6f6a62;
+    --accent: #ece5db;
+    --accent-foreground: var(--ink);
+    --destructive: #a8372c;
+    --success: #2c6f52;
+    --border: #ece5da;
+    --input: #ddd4c7;
+    --ring: var(--ink);
+    --radius: 0.625rem;
+
+    --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+    /*
+        Built-in easings are too soft to read at these durations. Everything entering or
+        responding uses ease-out, because it moves at the moment the eye is on it.
+    */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
 @media (prefers-color-scheme: dark) {
-    :root {
-        --bg: #16130f;
-        --fg: #f2eee7;
-        --muted: #9a938a;
-        --line: #2c2721;
-        --card: #201c17;
+    :root:not(.light) {
+        color-scheme: dark;
+
+        --background: var(--ink);
+        --foreground: var(--ivory);
+        --panel: #101011;
+        --card: #151517;
+        --card-foreground: var(--ivory);
+        --popover: #151517;
+        --popover-foreground: var(--ivory);
+        --primary: var(--ivory);
+        --primary-foreground: var(--ink);
+        --secondary: #232326;
+        --secondary-foreground: var(--ivory);
+        --muted: #151517;
+        --muted-foreground: #97928a;
+        --accent: #1e1e21;
+        --accent-foreground: var(--ivory);
+        --destructive: #e07a6e;
+        --success: #74c09b;
+        --border: #1b1b1e;
+        --input: #2a2a2e;
+        --ring: #97928a;
     }
 }
+
 * {
     box-sizing: border-box;
 }
+
 body {
     margin: 0;
-    padding: 12px;
-    font:
-        13px/1.5 system-ui,
-        -apple-system,
-        sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-}
-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.brand {
-    font-weight: 650;
-    letter-spacing: -0.01em;
-}
-.me {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    color: var(--muted);
-    font-size: 12px;
-    margin: 2px 0 12px;
+    padding: 0 14px 20px;
+    touch-action: manipulation;
+    font: 13px/1.5 var(--font-sans);
+    background: var(--background);
+    color: var(--foreground);
+    -webkit-font-smoothing: antialiased;
 }
 
-.switch {
-    display: inline-flex;
-    cursor: pointer;
-}
-.switch input {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-}
-.track {
-    width: 34px;
-    height: 20px;
-    border-radius: 999px;
-    background: var(--line);
-    display: block;
-    position: relative;
-    transition: background 0.15s;
-}
-.knob {
-    position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 16px;
-    height: 16px;
-    border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-    transition: transform 0.15s;
-}
-.switch input:checked + .track {
-    background: var(--accent);
-}
-.switch input:checked + .track .knob {
-    transform: translateX(14px);
-}
-.switch input:focus-visible + .track {
-    outline: 2px solid var(--accent);
+:focus-visible {
+    outline: 2px solid var(--ring);
     outline-offset: 2px;
-}
-.dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--warn);
-    flex: none;
-}
-.dot.on {
-    background: var(--accent);
+    border-radius: 6px;
 }
 
-/* Visible only to assistive tech: labels and the live region that narrates send results. */
 .sr-only {
     position: absolute;
     width: 1px;
@@ -107,279 +102,499 @@ header {
     padding: 0;
     margin: -1px;
     overflow: hidden;
-    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
     white-space: nowrap;
+}
+
+/* header ------------------------------------------------------------------ */
+
+header {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 16px 0 14px;
+    background: var(--background);
+}
+
+.identity {
+    min-width: 0;
+}
+
+.brand {
+    display: block;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.who {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 2px;
+    font-size: 11px;
+    color: var(--muted-foreground);
+}
+
+.who > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.dot {
+    flex: none;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--muted-foreground);
+    transition: background 160ms var(--ease-out);
+}
+
+.dot.on {
+    background: var(--success);
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: none;
+}
+
+.icon {
+    display: grid;
+    place-items: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
     border: 0;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    transition:
+        background 160ms var(--ease-out),
+        color 160ms var(--ease-out),
+        transform 140ms var(--ease-out);
+}
+
+.icon:active {
+    transform: scale(0.94);
+}
+
+.icon svg {
+    width: 13px;
+    height: 13px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.7;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+/* switch ------------------------------------------------------------------ */
+
+.switch {
+    display: inline-flex;
+    cursor: pointer;
+}
+
+.switch input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+}
+
+.track {
+    position: relative;
+    display: block;
+    width: 30px;
+    height: 18px;
+    border-radius: 999px;
+    background: var(--secondary);
+    transition: background 160ms var(--ease-out);
+}
+
+.knob {
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: var(--popover);
+    transition:
+        transform 160ms var(--ease-out),
+        background 160ms var(--ease-out);
+}
+
+.switch input:checked + .track {
+    background: var(--primary);
+}
+
+.switch input:checked + .track .knob {
+    transform: translateX(12px);
+    background: var(--primary-foreground);
+}
+
+.switch input:disabled + .track {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.switch input:focus-visible + .track {
+    outline: 2px solid var(--ring);
+    outline-offset: 2px;
+}
+
+/* eyebrows ---------------------------------------------------------------- */
+
+/*
+    The count is the eyebrow's whole reason to exist: how many people are within reach,
+    and how many links are waiting. A label with nothing after it would be decoration.
+*/
+.eyebrow {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    margin: 24px 0 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+}
+
+.eyebrow:first-child {
+    margin-top: 4px;
+}
+
+h2 {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    color: var(--muted-foreground);
+}
+
+.tally {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--foreground);
 }
 
 .chip {
     margin-left: auto;
-    flex: none;
-    padding: 1px 7px;
-    border-radius: 999px;
-    border: 1px solid var(--line);
-    background: var(--card);
-    font-size: 10px;
-    font-weight: 650;
-    letter-spacing: 0.03em;
-    color: var(--muted);
-    cursor: help;
-}
-.chip.locked {
-    border-color: var(--accent);
-    color: var(--accent);
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--success);
 }
 
-.count {
-    display: inline-grid;
-    place-items: center;
-    min-width: 16px;
-    height: 16px;
-    padding: 0 4px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: #fff;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: 0;
-}
-h2 {
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-    color: var(--muted);
-    margin: 18px 0 6px;
-}
-.hint,
-.empty {
-    color: var(--muted);
-    font-size: 12px;
-    margin: 0 0 10px;
-}
-.empty {
-    text-align: center;
-    padding: 14px;
-    border: 1px dashed var(--line);
-    border-radius: 8px;
-}
-.warn {
-    color: var(--warn);
-    font-weight: 600;
-    margin: 0 0 4px;
-}
-code {
-    display: block;
-    background: var(--card);
-    padding: 8px;
-    border-radius: 6px;
-    font-size: 11px;
-    overflow-x: auto;
-}
-ul {
-    list-style: none;
-    margin: 0;
+.link {
+    margin-left: auto;
     padding: 0;
+    border: 0;
+    background: none;
+    color: var(--muted-foreground);
+    font: inherit;
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 160ms var(--ease-out);
+}
+
+.link + .tally,
+.chip + .tally {
+    margin-left: 0;
+}
+
+.quiet {
+    margin: 6px 0 0;
+    font-size: 12px;
+    line-height: 1.6;
+    color: var(--muted-foreground);
+}
+
+ul {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
 }
+
+/* people ------------------------------------------------------------------ */
 
 .peer {
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--line);
-    border-radius: 10px;
-    background: var(--card);
+    padding: 9px 8px;
+    border-radius: 8px;
     cursor: pointer;
     transition:
-        border-color 0.12s,
-        transform 0.12s,
-        background 0.12s;
+        background 140ms var(--ease-out),
+        color 140ms var(--ease-out),
+        transform 140ms var(--ease-out);
 }
-.peer:hover {
-    border-color: var(--accent);
-}
-.peer:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-color: var(--accent);
-}
+
 .peer:active {
-    transform: scale(0.99);
+    transform: scale(0.985);
 }
+
+/*
+    The signature moment. Everything else on the panel is quiet, so the row being dragged
+    over inverts outright: ink fills it and the text flips to ivory. Mid-drag the cursor
+    is moving and attention is narrow, and a tinted background or a hairline ring is easy
+    to miss. Only the two brand colours are used, so it reads as the same panel, flipped.
+*/
 .peer.over {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 14%, var(--card));
-    transform: scale(1.02);
+    background: var(--primary);
+    color: var(--primary-foreground);
 }
-.peer.sent {
-    border-color: var(--accent);
-    background: color-mix(in srgb, var(--accent) 22%, var(--card));
+
+.peer.over .avatar {
+    background: var(--primary-foreground);
 }
-.peer.failed {
-    border-color: var(--warn);
+
+.peer.over .status {
+    color: var(--primary-foreground);
 }
+
 .avatar {
+    flex: none;
     width: 26px;
     height: 26px;
     border-radius: 50%;
-    flex: none;
-    display: grid;
-    place-items: center;
-    font-size: 11px;
-    font-weight: 650;
-    background: var(--accent);
-    color: #fff;
+    background: var(--secondary);
+    transition: background 140ms var(--ease-out);
 }
+
 .peer .name {
-    font-weight: 600;
-}
-.peer .sub {
-    color: var(--muted);
-    font-size: 11px;
-}
-.peer .col {
-    display: flex;
-    flex-direction: column;
+    flex: 1;
     min-width: 0;
-}
-.peer .col > * {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: 550;
 }
 
-.item {
-    padding: 8px 10px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-}
-.item.unread {
-    border-left: 3px solid var(--accent);
-}
-.item a {
-    color: inherit;
+/*
+    Empty until a send resolves, and on the right so the row stays one line either way.
+    A second line appearing under the name shifted every row below it, mid-drag.
+*/
+.peer .status {
+    flex: none;
+    font-size: 9.5px;
     font-weight: 600;
-    text-decoration: none;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+}
+
+.peer.sent .status {
+    color: var(--success);
+}
+
+.peer.failed .status {
+    color: var(--destructive);
+}
+
+/* arrived ----------------------------------------------------------------- */
+
+.item {
+    position: relative;
+    padding: 9px 8px 9px 19px;
+    border-radius: 8px;
+    transition: background 140ms var(--ease-out);
+}
+
+.item.unread::before {
+    content: "";
+    position: absolute;
+    left: 7px;
+    top: 15px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--primary);
+}
+
+.item.unverified::before {
+    background: var(--destructive);
+}
+
+.item a {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: inherit;
+    font-weight: 550;
+    text-decoration: none;
 }
-.item a:hover {
-    text-decoration: underline;
-}
+
 .item .sub {
-    color: var(--muted);
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    margin-top: 1px;
     font-size: 11px;
+    color: var(--muted-foreground);
 }
-.item.unverified {
-    border-left: 3px solid var(--warn);
-}
+
 .item.unverified .sub {
-    color: var(--warn);
+    color: var(--destructive);
 }
 
-button.ghost {
-    margin-top: 10px;
-    width: 100%;
-    padding: 7px;
-    background: none;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    color: var(--muted);
-    font: inherit;
+/* states ------------------------------------------------------------------ */
+
+.state {
+    padding: 12px 0 0;
+}
+
+.state-title {
+    margin: 0 0 4px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+}
+
+.state-body {
+    margin: 0 0 12px;
     font-size: 12px;
-    cursor: pointer;
-}
-button.ghost:hover {
-    border-color: var(--accent);
-    color: var(--fg);
-}
-button.ghost:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-}
-footer {
-    margin-top: 4px;
+    line-height: 1.6;
+    color: var(--muted-foreground);
 }
 
-.item a:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
-    border-radius: 3px;
+.state-note {
+    margin: 10px 0 0;
+    font-size: 10px;
+    color: var(--destructive);
 }
 
-h2 {
-    display: flex;
-    align-items: center;
-    gap: 6px;
+.state-note:empty {
+    display: none;
 }
 
-@media (prefers-reduced-motion: reduce) {
-    * {
-        transition: none !important;
-    }
-    .peer.over,
-    .peer:active {
-        transform: none;
-    }
+code {
+    display: block;
+    padding: 9px 10px;
+    border-radius: 6px;
+    background: var(--card);
+    font-size: 10.5px;
+    overflow-x: auto;
 }
 
 code.inline {
     display: inline;
     padding: 1px 4px;
-    font-size: 11px;
+    background: var(--secondary);
 }
+
+/* controls ---------------------------------------------------------------- */
 
 #claim-form {
     display: flex;
     gap: 6px;
-    margin-bottom: 6px;
 }
 
 #code {
     flex: 1;
     min-width: 0;
-    padding: 7px 9px;
-    border: 1px solid var(--line);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--fg);
-    font: inherit;
-    letter-spacing: 0.18em;
+    font-variant-numeric: tabular-nums;
+    padding: 9px 10px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--popover);
+    color: var(--foreground);
+    font-size: 13px;
+    letter-spacing: 0.3em;
     text-align: center;
+    transition: border-color 160ms var(--ease-out);
 }
 
-#code:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 1px;
-    border-color: var(--accent);
+#code::placeholder {
+    color: var(--muted-foreground);
 }
 
 #claim {
-    padding: 7px 12px;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: var(--accent);
-    color: #fff;
+    flex: none;
+    padding: 9px 16px;
+    border: 0;
+    border-radius: 6px;
+    background: var(--primary);
+    color: var(--primary-foreground);
     font: inherit;
     font-size: 12px;
+    font-weight: 650;
     cursor: pointer;
-    white-space: nowrap;
+    transition:
+        opacity 160ms var(--ease-out),
+        transform 140ms var(--ease-out);
+}
+
+#claim:active {
+    transform: scale(0.97);
 }
 
 #claim:disabled {
-    opacity: 0.55;
+    opacity: 0.45;
     cursor: default;
+    transform: none;
 }
 
-#claim-error:empty {
-    display: none;
+/*
+    Touch devices fire hover on tap, so a row would stay highlighted after a press.
+*/
+@media (hover: hover) and (pointer: fine) {
+    .peer:hover {
+        background: var(--accent);
+    }
+
+    .item:hover {
+        background: var(--accent);
+    }
+
+    .item a:hover {
+        text-decoration: underline;
+    }
+
+    .icon:hover {
+        background: var(--accent);
+        color: var(--foreground);
+    }
+
+    .link:hover {
+        color: var(--foreground);
+    }
+
+    #claim:hover {
+        opacity: 0.9;
+    }
 }
 
-#claim-error {
-    color: var(--warn);
+/*
+    Reduced motion keeps colour and opacity, which carry meaning here, and drops movement.
+*/
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition-property: background, color, border-color, opacity !important;
+        transition-duration: 120ms !important;
+    }
+
+    .peer:active,
+    .icon:active,
+    #claim:active {
+        transform: none;
+    }
 }
