@@ -6,14 +6,6 @@
     src: url("fonts/plus-jakarta-sans-latin-wght-normal.woff2") format("woff2-variations");
 }
 
-@font-face {
-    font-family: "Geist Mono Variable";
-    font-style: normal;
-    font-weight: 100 900;
-    font-display: swap;
-    src: url("fonts/geist-mono-latin-wght-normal.woff2") format("woff2-variations");
-}
-
 :root {
     color-scheme: light;
 
@@ -48,7 +40,12 @@
     --radius: 0.625rem;
 
     --font-sans: "Plus Jakarta Sans Variable", ui-sans-serif, system-ui, -apple-system, sans-serif;
-    --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;
+
+    /*
+        Built-in easings are too soft to read at these durations. Everything entering or
+        responding uses ease-out, because it moves at the moment the eye is on it.
+    */
+    --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -85,6 +82,7 @@
 body {
     margin: 0;
     padding: 0 14px 20px;
+    touch-action: manipulation;
     font: 13px/1.5 var(--font-sans);
     background: var(--background);
     color: var(--foreground);
@@ -118,7 +116,7 @@ header {
     align-items: flex-start;
     justify-content: space-between;
     gap: 10px;
-    padding: 14px 0 12px;
+    padding: 16px 0 14px;
     background: var(--background);
 }
 
@@ -128,8 +126,9 @@ header {
 
 .brand {
     display: block;
-    font-size: 14px;
-    font-weight: 600;
+    margin: 0;
+    font-size: 13px;
+    font-weight: 800;
     letter-spacing: -0.02em;
 }
 
@@ -137,8 +136,8 @@ header {
     display: flex;
     align-items: center;
     gap: 6px;
-    margin-top: 1px;
-    font-size: 11.5px;
+    margin-top: 2px;
+    font-size: 11px;
     color: var(--muted-foreground);
 }
 
@@ -150,10 +149,11 @@ header {
 
 .dot {
     flex: none;
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
     border-radius: 50%;
     background: var(--muted-foreground);
+    transition: background 160ms var(--ease-out);
 }
 
 .dot.on {
@@ -163,14 +163,10 @@ header {
 .actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     flex: none;
 }
 
-/*
-    Refresh is a maintenance action, not something to reach for, so it reads as an icon
-    rather than a button competing with the switch beside it.
-*/
 .icon {
     display: grid;
     place-items: center;
@@ -182,19 +178,22 @@ header {
     background: none;
     color: var(--muted-foreground);
     cursor: pointer;
+    transition:
+        background 160ms var(--ease-out),
+        color 160ms var(--ease-out),
+        transform 140ms var(--ease-out);
 }
 
-.icon:hover {
-    background: var(--accent);
-    color: var(--foreground);
+.icon:active {
+    transform: scale(0.94);
 }
 
 .icon svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     fill: none;
     stroke: currentColor;
-    stroke-width: 1.6;
+    stroke-width: 1.7;
     stroke-linecap: round;
     stroke-linejoin: round;
 }
@@ -216,28 +215,24 @@ header {
 .track {
     position: relative;
     display: block;
-    width: 32px;
-    height: 19px;
+    width: 30px;
+    height: 18px;
     border-radius: 999px;
     background: var(--secondary);
-    transition: background 0.15s;
+    transition: background 160ms var(--ease-out);
 }
 
 .knob {
     position: absolute;
     top: 2px;
     left: 2px;
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
     background: var(--popover);
     transition:
-        transform 0.15s,
-        background 0.15s;
-}
-
-.switch input:checked + .track .knob {
-    background: var(--primary-foreground);
+        transform 160ms var(--ease-out),
+        background 160ms var(--ease-out);
 }
 
 .switch input:checked + .track {
@@ -245,11 +240,12 @@ header {
 }
 
 .switch input:checked + .track .knob {
-    transform: translateX(13px);
+    transform: translateX(12px);
+    background: var(--primary-foreground);
 }
 
 .switch input:disabled + .track {
-    opacity: 0.45;
+    opacity: 0.4;
     cursor: default;
 }
 
@@ -258,44 +254,48 @@ header {
     outline-offset: 2px;
 }
 
-/* sections ---------------------------------------------------------------- */
+/* eyebrows ---------------------------------------------------------------- */
 
-.section-head {
+/*
+    The count is the eyebrow's whole reason to exist: how many people are within reach,
+    and how many links are waiting. A label with nothing after it would be decoration.
+*/
+.eyebrow {
     display: flex;
-    align-items: center;
+    align-items: baseline;
     gap: 8px;
-    margin: 22px 0 6px;
+    margin: 24px 0 8px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
 }
 
-.section-head:first-child {
-    margin-top: 8px;
+.eyebrow:first-child {
+    margin-top: 4px;
 }
 
 h2 {
     margin: 0;
-    font-size: 11px;
-    font-weight: 500;
+    font-size: 10px;
+    font-weight: 600;
     text-transform: uppercase;
-    letter-spacing: 0.07em;
+    letter-spacing: 0.09em;
     color: var(--muted-foreground);
 }
 
-.count {
-    padding: 0 5px;
-    border-radius: 999px;
-    background: var(--secondary);
-    color: var(--secondary-foreground);
+.tally {
+    margin-left: auto;
+    font-variant-numeric: tabular-nums;
     font-size: 10px;
     font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--foreground);
 }
 
-/*
-    Only shown when a shared secret is set. No chip is the ordinary case, so saying
-    "open" every time was noise that taught the reader to ignore the spot.
-*/
 .chip {
     margin-left: auto;
-    font-size: 10px;
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
     color: var(--success);
 }
 
@@ -308,17 +308,18 @@ h2 {
     font: inherit;
     font-size: 11px;
     cursor: pointer;
+    transition: color 160ms var(--ease-out);
 }
 
-.link:hover {
-    color: var(--foreground);
-    text-decoration: underline;
+.link + .tally,
+.chip + .tally {
+    margin-left: 0;
 }
 
 .quiet {
-    margin: 2px 0 0;
+    margin: 6px 0 0;
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.6;
     color: var(--muted-foreground);
 }
 
@@ -332,45 +333,49 @@ ul {
 
 /* people ------------------------------------------------------------------ */
 
-/*
-    Rows, not cards. A stack of bordered boxes gave every person the same weight as every
-    section, and the panel read as a pile of containers.
-*/
 .peer {
-    position: relative;
     display: flex;
     align-items: center;
     gap: 10px;
-    padding: 8px;
+    padding: 9px 8px;
     border-radius: 8px;
     cursor: pointer;
-    transition: background 0.12s;
+    transition:
+        background 140ms var(--ease-out),
+        color 140ms var(--ease-out),
+        transform 140ms var(--ease-out);
 }
 
-.peer:hover {
-    background: var(--accent);
+.peer:active {
+    transform: scale(0.985);
 }
 
 /*
-    Softened off full primary. Ivory on near black was the highest contrast edge on the
-    panel, so the row being dragged over shouted louder than the link being dragged.
+    The signature moment. Everything else on the panel is quiet, so the row being dragged
+    over inverts outright: ink fills it and the text flips to ivory. Mid-drag the cursor
+    is moving and attention is narrow, and a tinted background or a hairline ring is easy
+    to miss. Only the two brand colours are used, so it reads as the same panel, flipped.
 */
 .peer.over {
-    background: var(--accent);
-    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--primary) 45%, var(--background));
+    background: var(--primary);
+    color: var(--primary-foreground);
+}
+
+.peer.over .avatar {
+    background: var(--primary-foreground);
+}
+
+.peer.over .status {
+    color: var(--primary-foreground);
 }
 
 .avatar {
     flex: none;
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: var(--secondary);
-    color: var(--secondary-foreground);
-    font-size: 10px;
-    font-weight: 600;
+    transition: background 140ms var(--ease-out);
 }
 
 .peer .name {
@@ -383,13 +388,15 @@ ul {
 }
 
 /*
-    Empty until a send resolves, and on the right so the row keeps one line either way.
-    A second line appearing under the name shifted every row below it mid-drag.
+    Empty until a send resolves, and on the right so the row stays one line either way.
+    A second line appearing under the name shifted every row below it, mid-drag.
 */
 .peer .status {
     flex: none;
-    font-family: var(--font-mono);
-    font-size: 10.5px;
+    font-size: 9.5px;
+    font-weight: 600;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
     color: var(--muted-foreground);
 }
 
@@ -401,23 +408,20 @@ ul {
     color: var(--destructive);
 }
 
-/* received ---------------------------------------------------------------- */
+/* arrived ----------------------------------------------------------------- */
 
 .item {
     position: relative;
-    padding: 8px 8px 8px 20px;
+    padding: 9px 8px 9px 19px;
     border-radius: 8px;
-}
-
-.item:hover {
-    background: var(--accent);
+    transition: background 140ms var(--ease-out);
 }
 
 .item.unread::before {
     content: "";
     position: absolute;
-    left: 8px;
-    top: 14px;
+    left: 7px;
+    top: 15px;
     width: 5px;
     height: 5px;
     border-radius: 50%;
@@ -438,15 +442,12 @@ ul {
     text-decoration: none;
 }
 
-.item a:hover {
-    text-decoration: underline;
-}
-
 .item .sub {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    margin-top: 1px;
     font-size: 11px;
     color: var(--muted-foreground);
 }
@@ -458,24 +459,26 @@ ul {
 /* states ------------------------------------------------------------------ */
 
 .state {
-    padding: 20px 0 0;
+    padding: 12px 0 0;
 }
 
 .state-title {
     margin: 0 0 4px;
-    font-weight: 600;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
 }
 
 .state-body {
     margin: 0 0 12px;
     font-size: 12px;
-    line-height: 1.55;
+    line-height: 1.6;
     color: var(--muted-foreground);
 }
 
 .state-note {
-    margin: 8px 0 0;
-    font-size: 11px;
+    margin: 10px 0 0;
+    font-size: 10px;
     color: var(--destructive);
 }
 
@@ -485,11 +488,10 @@ ul {
 
 code {
     display: block;
-    padding: 8px 10px;
+    padding: 9px 10px;
     border-radius: 6px;
     background: var(--card);
-    font-family: var(--font-mono);
-    font-size: 11px;
+    font-size: 10.5px;
     overflow-x: auto;
 }
 
@@ -509,15 +511,16 @@ code.inline {
 #code {
     flex: 1;
     min-width: 0;
-    padding: 8px 10px;
+    font-variant-numeric: tabular-nums;
+    padding: 9px 10px;
     border: 1px solid var(--input);
     border-radius: 6px;
     background: var(--popover);
     color: var(--foreground);
-    font-family: var(--font-mono);
     font-size: 13px;
-    letter-spacing: 0.28em;
+    letter-spacing: 0.3em;
     text-align: center;
+    transition: border-color 160ms var(--ease-out);
 }
 
 #code::placeholder {
@@ -526,28 +529,72 @@ code.inline {
 
 #claim {
     flex: none;
-    padding: 8px 14px;
+    padding: 9px 16px;
     border: 0;
     border-radius: 6px;
     background: var(--primary);
     color: var(--primary-foreground);
     font: inherit;
     font-size: 12px;
-    font-weight: 600;
+    font-weight: 650;
     cursor: pointer;
+    transition:
+        opacity 160ms var(--ease-out),
+        transform 140ms var(--ease-out);
 }
 
-#claim:hover {
-    opacity: 0.9;
+#claim:active {
+    transform: scale(0.97);
 }
 
 #claim:disabled {
-    opacity: 0.5;
+    opacity: 0.45;
     cursor: default;
+    transform: none;
 }
 
+/*
+    Touch devices fire hover on tap, so a row would stay highlighted after a press.
+*/
+@media (hover: hover) and (pointer: fine) {
+    .peer:hover {
+        background: var(--accent);
+    }
+
+    .item:hover {
+        background: var(--accent);
+    }
+
+    .item a:hover {
+        text-decoration: underline;
+    }
+
+    .icon:hover {
+        background: var(--accent);
+        color: var(--foreground);
+    }
+
+    .link:hover {
+        color: var(--foreground);
+    }
+
+    #claim:hover {
+        opacity: 0.9;
+    }
+}
+
+/*
+    Reduced motion keeps colour and opacity, which carry meaning here, and drops movement.
+*/
 @media (prefers-reduced-motion: reduce) {
     * {
-        transition: none !important;
+        transition-property: background, color, border-color, opacity !important;
+        transition-duration: 120ms !important;
+    }
+
+    .peer:active,
+    .icon:active,
+    #claim:active {
+        transform: none;
     }
 }

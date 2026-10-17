@@ -9,10 +9,11 @@
     <body>
         <header>
             <div class="identity">
-                <span class="brand">ezyshare</span>
-                <span class="who"
-                    ><span id="dot" class="dot"></span><span id="myname">connecting…</span></span
-                >
+                <h1 class="brand" translate="no">ezyshare</h1>
+                <span class="who">
+                    <span id="dot" class="dot"></span>
+                    <span id="myname">connecting…</span>
+                </span>
             </div>
             <div class="actions">
                 <button
@@ -23,7 +24,7 @@
                     aria-label="Refresh"
                 >
                     <svg viewBox="0 0 16 16" aria-hidden="true">
-                        <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2v3h-3" />
+                        <path d="M13.5 8a5.5 5.5 0 1 1-1.6-3.9M13.5 2.2v3h-3" />
                     </svg>
                 </button>
                 <label class="switch" title="Turn sharing on or off">
@@ -37,7 +38,7 @@
         <section id="offline" class="state" hidden>
             <p class="state-title">Daemon not running</p>
             <p class="state-body">Start it, then refresh.</p>
-            <code>./start.sh</code>
+            <code translate="no">./start.sh</code>
             <p class="state-note" id="errline"></p>
         </section>
 
@@ -45,8 +46,8 @@
             <p class="state-title">Another extension is paired</p>
             <p class="state-body">
                 Reloading from a new folder gives this extension a new id. Your daemon printed a
-                code — check its terminal, or the end of
-                <code class="inline">~/.ezyshare/daemon.log</code>.
+                code. Check its terminal, or the end of
+                <code class="inline" translate="no">~/.ezyshare/daemon.log</code>.
             </p>
             <form id="claim-form">
                 <input
@@ -56,6 +57,7 @@
                     pattern="[0-9]{6}"
                     maxlength="6"
                     autocomplete="off"
+                    spellcheck="false"
                     placeholder="000000"
                     aria-label="Pairing code"
                 />
@@ -66,26 +68,27 @@
 
         <section id="paused" class="state" hidden>
             <p class="state-title">Sharing is off</p>
-            <p class="state-body">You are invisible to everyone and links are refused.</p>
+            <p class="state-body">Nobody can see you and links are refused.</p>
         </section>
 
         <section id="main" hidden>
-            <div class="section-head">
-                <h2>People</h2>
+            <div class="eyebrow">
+                <h2>On this wifi</h2>
                 <span id="lock" class="chip" hidden></span>
+                <span id="peercount" class="tally" hidden></span>
             </div>
-            <ul id="peers" aria-label="People on this network"></ul>
+            <ul id="peers" aria-label="People on this wifi"></ul>
             <p id="nopeers" class="quiet" hidden>
-                Nobody else yet. Everyone needs the daemon running on the same wifi.
+                Nobody else yet. Start ezyshare on another machine on this wifi.
             </p>
 
-            <div class="section-head">
-                <h2>Received</h2>
-                <span id="unread" class="count" hidden></span>
+            <div class="eyebrow">
+                <h2>Arrived</h2>
                 <button type="button" id="clear" class="link">Clear</button>
+                <span id="unread" class="tally" hidden></span>
             </div>
-            <ul id="inbox" aria-label="Received links"></ul>
-            <p id="noinbox" class="quiet" hidden>Nothing yet.</p>
+            <ul id="inbox" aria-label="Links people sent you"></ul>
+            <p id="noinbox" class="quiet" hidden>Nothing yet. Links people send you land here.</p>
         </section>
 
         <div id="live" class="sr-only" role="status" aria-live="polite"></div>

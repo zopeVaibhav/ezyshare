@@ -8,10 +8,26 @@ const out = path.join(root, "dist", "extension");
 fs.rmSync(out, { recursive: true, force: true });
 fs.mkdirSync(out, { recursive: true });
 
-execFileSync("bunx", ["tsc", "-p", path.join(root, "extension", "tsconfig.json")], {
-    stdio: "inherit",
-    cwd: root,
-});
+/*
+    bun build rather than tsc, because the panel imports npm packages and tsc only
+    transpiles. Types are still checked separately by `bun run typecheck`.
+*/
+execFileSync(
+    "bun",
+    [
+        "build",
+        path.join(root, "extension", "src", "background.ts"),
+        path.join(root, "extension", "src", "sidepanel.ts"),
+        "--outdir",
+        out,
+        "--target",
+        "browser",
+        "--format",
+        "esm",
+        "--minify",
+    ],
+    { stdio: "inherit", cwd: root },
+);
 
 const assets = ["manifest.json", "sidepanel.html", "sidepanel.css"];
 for (const asset of assets) {
@@ -25,7 +41,6 @@ fs.cpSync(path.join(root, "extension", "icons"), path.join(out, "icons"), { recu
 */
 const fonts = [
     ["@fontsource-variable/plus-jakarta-sans", "plus-jakarta-sans-latin-wght-normal.woff2"],
-    ["@fontsource-variable/geist-mono", "geist-mono-latin-wght-normal.woff2"],
 ] as const;
 
 const fontsOut = path.join(out, "fonts");

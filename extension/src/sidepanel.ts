@@ -1,3 +1,4 @@
+import { avatarFor } from "./avatar.ts";
 import {
     api,
     claimPairing,
@@ -12,17 +13,6 @@ function el<T extends HTMLElement>(id: string): T {
     const node = document.getElementById(id);
     if (!node) throw new Error(`missing element: ${id}`);
     return node as T;
-}
-
-function initials(name: string): string {
-    return (
-        name
-            .split(/[\s\-_.]+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((word) => word.charAt(0).toUpperCase())
-            .join("") || "?"
-    );
 }
 
 function ago(ts: number): string {
@@ -112,16 +102,15 @@ function peerCard(peer: PeerCard): HTMLLIElement {
     li.setAttribute("role", "button");
     li.dataset.id = peer.id;
     li.innerHTML = `
-    <span class="avatar" aria-hidden="true"></span>
+    <img class="avatar" alt="" width="26" height="26" />
     <span class="name"></span>
     <span class="status" aria-live="polite"></span>`;
 
-    const set = (selector: string, text: string) => {
-        const node = li.querySelector<HTMLElement>(selector);
-        if (node) node.textContent = text;
-    };
-    set(".avatar", initials(peer.name));
-    set(".name", peer.name);
+    const avatar = li.querySelector<HTMLImageElement>(".avatar");
+    if (avatar) avatar.src = avatarFor(peer.id);
+
+    const name = li.querySelector<HTMLElement>(".name");
+    if (name) name.textContent = peer.name;
 
     /*
         The address stays reachable but off the row. It is the tell that a peer is not at
@@ -179,6 +168,10 @@ function renderPeers(list: PeerCard[]): void {
         el("peers").replaceChildren(...list.map(peerCard));
     }
     el("nopeers").hidden = list.length > 0;
+
+    const tally = el("peercount");
+    tally.hidden = list.length === 0;
+    tally.textContent = String(list.length);
 }
 
 function inboxRow(item: InboxItem): HTMLLIElement {
@@ -203,8 +196,8 @@ function inboxRow(item: InboxItem): HTMLLIElement {
     const sub = document.createElement("span");
     sub.className = "sub";
     sub.textContent = unverified
-        ? `${item.fromName} · not a known peer · ${ago(item.ts)}`
-        : `${item.fromName} · ${ago(item.ts)}`;
+        ? `Unverified sender, ${ago(item.ts)}`
+        : `${item.fromName}, ${ago(item.ts)}`;
 
     li.append(link, sub);
     return li;
@@ -215,10 +208,12 @@ function renderInbox(items: InboxItem[]): void {
     el("inbox").replaceChildren(...recent.map(inboxRow));
     el("noinbox").hidden = recent.length > 0;
 
+    el("clear").hidden = recent.length === 0;
+
     const unread = recent.filter((item) => !item.read).length;
     const badge = el("unread");
     badge.hidden = unread === 0;
-    badge.textContent = String(unread);
+    badge.textContent = `${unread} new`;
     badge.setAttribute("aria-label", `${unread} unread`);
 }
 
@@ -268,6 +263,7 @@ async function tick(): Promise<void> {
         el("myname").textContent = peerData.enabled
             ? peerData.me.name
             : `${peerData.me.name} · hidden`;
+        el("myname").title = peerData.me.name;
 
         renderLock(peerData.secured);
         renderPeers(peerData.peers);
